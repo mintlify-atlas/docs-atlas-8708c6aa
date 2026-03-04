@@ -1,0 +1,737 @@
+---
+title: 'Worker Controllers'
+description: 'API reference for Worker role controllers - Orders, Customers, Equipment, Inventory, and Billing'
+---
+
+## Overview
+
+Worker controllers handle day-to-day operations for technicians and workers. All routes require authentication and the `role:worker,admin,developer` middleware.
+
+---
+
+## Orders
+
+Manage service orders and repair requests.
+
+### List Orders
+
+<ParamField path="GET /worker/orders" type="route">
+  Display paginated list of orders with search functionality.
+</ParamField>
+
+**Middleware:** `auth`, `role:worker,admin,developer`
+
+**Route Name:** `worker.orders`
+
+**Query Parameters:**
+
+<ParamField query="search" type="string" optional>
+  Search by order ID, technician name, customer name, equipment brand, or equipment model
+</ParamField>
+
+**Response:**
+- Returns view with orders (paginated, 18 per page)
+- Includes customers, equipments, company technicians
+- AI diagnostics information (plan, limits, usage)
+
+**Controller:** `App\Http\Controllers\Worker\OrderController@index`
+
+**Source:** routes/web.php:29
+
+---
+
+### Create Order
+
+<ParamField path="POST /worker/orders" type="route">
+  Create a new service order with optional AI diagnosis.
+</ParamField>
+
+**Middleware:** `auth`, `role:worker,admin,developer`
+
+**Route Name:** `worker.orders.store`
+
+**Request Parameters:**
+
+<ParamField body="customer_id" type="integer" required>
+  ID of the customer (must exist in customers table)
+</ParamField>
+
+<ParamField body="equipment_id" type="integer" required>
+  ID of the equipment (must exist in equipments table)
+</ParamField>
+
+<ParamField body="technician" type="string" optional>
+  Name of assigned technician (max 255 characters)
+</ParamField>
+
+<ParamField body="technician_user_id" type="integer" optional>
+  User ID of assigned technician (must exist in users table)
+</ParamField>
+
+<ParamField body="request_ai_diagnosis" type="boolean" optional>
+  Whether to request AI-powered diagnosis
+</ParamField>
+
+<ParamField body="symptoms" type="string" optional>
+  Description of equipment symptoms (5-600 characters, required if request_ai_diagnosis is true)
+</ParamField>
+
+<ParamField body="status" type="string" optional>
+  Order status (pending, in_progress, waiting_parts, completed, cancelled, delivered)
+</ParamField>
+
+<ParamField body="estimated_cost" type="number" optional>
+  Estimated repair cost (minimum 0)
+</ParamField>
+
+**Response:**
+- Redirects back with success message
+- May include AI warning if diagnosis quota exceeded
+
+**Validation:** `StoreOrderRequest`
+
+**Controller:** `App\Http\Controllers\Worker\OrderController@store`
+
+**Source:** routes/web.php:30
+
+---
+
+### Update Order Status
+
+<ParamField path="PATCH /worker/orders/{order}/status" type="route">
+  Update the status of an existing order.
+</ParamField>
+
+**Middleware:** `auth`, `role:worker,admin,developer`
+
+**Route Name:** `worker.orders.status`
+
+**URL Parameters:**
+
+<ParamField path="order" type="integer" required>
+  Order ID
+</ParamField>
+
+**Request Parameters:**
+
+<ParamField body="status" type="string" required>
+  New order status (pending, in_progress, waiting_parts, completed, cancelled, delivered)
+</ParamField>
+
+**Response:**
+- Redirects back with success message
+
+**Authorization:** Order must belong to user's company (except developers)
+
+**Validation:** `UpdateOrderStatusRequest`
+
+**Controller:** `App\Http\Controllers\Worker\OrderController@updateStatus`
+
+**Source:** routes/web.php:31
+
+---
+
+### AI Diagnosis
+
+<ParamField path="POST /worker/orders/diagnose" type="route">
+  Request AI diagnosis for equipment (currently disabled - use request_ai_diagnosis flag when creating order).
+</ParamField>
+
+**Middleware:** `auth`, `role:worker,admin,developer`
+
+**Route Name:** `worker.orders.diagnose`
+
+**Request Parameters:**
+
+<ParamField body="equipment_id" type="integer" required>
+  ID of equipment to diagnose
+</ParamField>
+
+<ParamField body="symptoms" type="string" required>
+  Equipment symptoms (5-600 characters)
+</ParamField>
+
+**Response:**
+- Returns JSON error (422) indicating direct diagnosis is disabled
+- Users should use "request_ai_diagnosis" flag when creating orders instead
+
+**Controller:** `App\Http\Controllers\Worker\OrderController@diagnose`
+
+**Source:** routes/web.php:32
+
+---
+
+## Customers
+
+Manage customer records.
+
+### List Customers
+
+<ParamField path="GET /worker/customers" type="route">
+  Display paginated list of customers.
+</ParamField>
+
+**Middleware:** `auth`, `role:worker,admin,developer`
+
+**Route Name:** `worker.customers`
+
+**Query Parameters:**
+
+<ParamField query="search" type="string" optional>
+  Search by customer name, email, or phone
+</ParamField>
+
+**Response:**
+- Returns view with customers (paginated, 20 per page)
+- Filtered by company (except for developers)
+
+**Controller:** `App\Http\Controllers\Worker\CustomerController@index`
+
+**Source:** routes/web.php:34
+
+---
+
+### Create Customer
+
+<ParamField path="POST /worker/customers" type="route">
+  Register a new customer.
+</ParamField>
+
+**Middleware:** `auth`, `role:worker,admin,developer`
+
+**Route Name:** `worker.customers.store`
+
+**Request Parameters:**
+
+<ParamField body="name" type="string" required>
+  Customer full name (max 255 characters)
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  Customer email address (max 255 characters)
+</ParamField>
+
+<ParamField body="phone" type="string" optional>
+  Customer phone number (max 50 characters)
+</ParamField>
+
+<ParamField body="address" type="string" optional>
+  Customer address (max 255 characters)
+</ParamField>
+
+**Response:**
+- Redirects back with success message
+- Customer is automatically assigned to user's company
+
+**Validation:** `StoreCustomerRequest`
+
+**Controller:** `App\Http\Controllers\Worker\CustomerController@store`
+
+**Source:** routes/web.php:35
+
+---
+
+## Equipment
+
+Manage customer equipment records.
+
+### List Equipment
+
+<ParamField path="GET /worker/equipments" type="route">
+  Display paginated list of equipment.
+</ParamField>
+
+**Middleware:** `auth`, `role:worker,admin,developer`
+
+**Route Name:** `worker.equipments`
+
+**Query Parameters:**
+
+<ParamField query="search" type="string" optional>
+  Search by brand, model, type, or customer name
+</ParamField>
+
+**Response:**
+- Returns view with equipment (paginated, 18 per page)
+- Includes associated customers
+- Filtered by company (except for developers)
+
+**Controller:** `App\Http\Controllers\Worker\EquipmentController@index`
+
+**Source:** routes/web.php:37
+
+---
+
+### Create Equipment
+
+<ParamField path="POST /worker/equipments" type="route">
+  Register new equipment for a customer.
+</ParamField>
+
+**Middleware:** `auth`, `role:worker,admin,developer`
+
+**Route Name:** `worker.equipments.store`
+
+**Request Parameters:**
+
+<ParamField body="customer_id" type="integer" required>
+  Customer who owns the equipment (must exist and belong to user's company)
+</ParamField>
+
+<ParamField body="type" type="string" required>
+  Equipment type (e.g., "Refrigerator", "Washing Machine") - max 100 characters
+</ParamField>
+
+<ParamField body="brand" type="string" required>
+  Equipment brand (max 100 characters)
+</ParamField>
+
+<ParamField body="model" type="string" optional>
+  Equipment model number (max 150 characters)
+</ParamField>
+
+<ParamField body="serial_number" type="string" optional>
+  Equipment serial number (max 150 characters)
+</ParamField>
+
+**Response:**
+- Redirects back with success message
+- Equipment is automatically assigned to customer's company
+
+**Authorization:** Customer must belong to user's company
+
+**Validation:** `StoreEquipmentRequest`
+
+**Controller:** `App\Http\Controllers\Worker\EquipmentController@store`
+
+**Source:** routes/web.php:38
+
+---
+
+## Inventory
+
+Manage inventory items and stock levels. Requires `module_access:inventory` middleware.
+
+### List Inventory Items
+
+<ParamField path="GET /worker/inventory" type="route">
+  Display inventory items with stock movements and alerts.
+</ParamField>
+
+**Middleware:** `auth`, `role:worker,admin,developer`, `module_access:inventory`
+
+**Route Name:** `worker.inventory`
+
+**Query Parameters:**
+
+<ParamField query="search" type="string" optional>
+  Search by item name or internal code
+</ParamField>
+
+**Response:**
+- Returns view with inventory items (paginated, 20 per page)
+- Recent stock movements (last 12)
+- Low stock items and notifications
+- Filtered by company
+
+**Controller:** `App\Http\Controllers\Worker\InventoryController@index`
+
+**Source:** routes/web.php:42-44
+
+---
+
+### Create Inventory Item
+
+<ParamField path="POST /worker/inventory" type="route">
+  Add a new item to inventory.
+</ParamField>
+
+**Middleware:** `auth`, `role:worker,admin,developer`, `module_access:inventory`
+
+**Route Name:** `worker.inventory.store`
+
+**Request Parameters:**
+
+<ParamField body="name" type="string" required>
+  Item name (max 180 characters)
+</ParamField>
+
+<ParamField body="internal_code" type="string" required>
+  Unique internal code (max 120 characters, unique per company)
+</ParamField>
+
+<ParamField body="quantity" type="integer" required>
+  Initial stock quantity (0-1,000,000)
+</ParamField>
+
+<ParamField body="low_stock_threshold" type="integer" optional>
+  Alert threshold for low stock (0-1,000,000)
+</ParamField>
+
+<ParamField body="is_sale_enabled" type="boolean" optional>
+  Whether item can be sold
+</ParamField>
+
+<ParamField body="sale_price" type="number" optional>
+  Sale price (required if is_sale_enabled is true, max 99,999,999.99)
+</ParamField>
+
+**Response:**
+- Redirects back with success message
+- Item is assigned to user's company
+
+**Authorization:** User must have inventory module access
+
+**Validation:** `StoreInventoryItemRequest`
+
+**Controller:** `App\Http\Controllers\Worker\InventoryController@store`
+
+**Source:** routes/web.php:45-47
+
+---
+
+### Adjust Stock
+
+<ParamField path="PATCH /worker/inventory/{item}/stock" type="route">
+  Add or remove stock for an inventory item.
+</ParamField>
+
+**Middleware:** `auth`, `role:worker,admin,developer`, `module_access:inventory`
+
+**Route Name:** `worker.inventory.stock`
+
+**URL Parameters:**
+
+<ParamField path="item" type="integer" required>
+  Inventory item ID
+</ParamField>
+
+**Request Parameters:**
+
+<ParamField body="movement_type" type="string" required>
+  Type of stock movement: "addition" or "removal"
+</ParamField>
+
+<ParamField body="quantity" type="integer" required>
+  Quantity to add or remove (1-1,000,000)
+</ParamField>
+
+<ParamField body="notes" type="string" optional>
+  Notes about the movement (max 255 characters)
+</ParamField>
+
+**Response:**
+- Redirects back with success message
+- Creates inventory movement record
+
+**Authorization:** Item must belong to user's company
+
+**Validation:** `AdjustInventoryStockRequest`
+
+**Controller:** `App\Http\Controllers\Worker\InventoryController@adjustStock`
+
+**Source:** routes/web.php:48-50
+
+---
+
+### Delete Inventory Item
+
+<ParamField path="DELETE /worker/inventory/{item}" type="route">
+  Remove an item from inventory.
+</ParamField>
+
+**Middleware:** `auth`, `role:worker,admin,developer`, `module_access:inventory`
+
+**Route Name:** `worker.inventory.destroy`
+
+**URL Parameters:**
+
+<ParamField path="item" type="integer" required>
+  Inventory item ID
+</ParamField>
+
+**Response:**
+- Redirects back with success message
+
+**Authorization:** Item must belong to user's company
+
+**Controller:** `App\Http\Controllers\Worker\InventoryController@destroy`
+
+**Source:** routes/web.php:51-53
+
+---
+
+## Billing
+
+Generate invoices and quotes. Requires `module_access:billing` middleware.
+
+### List Billing Documents
+
+<ParamField path="GET /worker/billing" type="route">
+  Display list of billing documents (invoices and quotes).
+</ParamField>
+
+**Middleware:** `auth`, `role:worker,admin,developer`, `module_access:billing`
+
+**Route Name:** `worker.billing`
+
+**Response:**
+- Returns view with billing documents (paginated, 20 per page)
+- Includes customers and inventory items for document creation
+- Company information
+- Available order statuses
+
+**Controller:** `App\Http\Controllers\Worker\BillingController@index`
+
+**Source:** routes/web.php:54-56
+
+---
+
+### Create Billing Document
+
+<ParamField path="POST /worker/billing" type="route">
+  Generate a new invoice or quote.
+</ParamField>
+
+**Middleware:** `auth`, `role:worker,admin,developer`, `module_access:billing`
+
+**Route Name:** `worker.billing.store`
+
+**Request Parameters:**
+
+<ParamField body="document_type" type="string" required>
+  Type of document: "quote" or "invoice"
+</ParamField>
+
+<ParamField body="source" type="string" required>
+  Document source: "repair", "sale", or "mixed"
+</ParamField>
+
+<ParamField body="customer_mode" type="string" required>
+  Customer type: "registered" or "walk_in"
+</ParamField>
+
+<ParamField body="customer_id" type="integer" optional>
+  Registered customer ID (required if customer_mode is "registered")
+</ParamField>
+
+<ParamField body="walk_in_name" type="string" optional>
+  Walk-in customer name (required if customer_mode is "walk_in", max 180 characters)
+</ParamField>
+
+<ParamField body="tax_mode" type="string" required>
+  Tax handling: "included" or "excluded"
+</ParamField>
+
+<ParamField body="notes" type="string" optional>
+  Document notes (max 2000 characters)
+</ParamField>
+
+<ParamField body="items" type="array" required>
+  Array of line items (minimum 1 item)
+</ParamField>
+
+<ParamField body="items[].item_kind" type="string" required>
+  Item type: "service" or "product"
+</ParamField>
+
+<ParamField body="items[].description" type="string" required>
+  Item description (max 255 characters)
+</ParamField>
+
+<ParamField body="items[].quantity" type="number" required>
+  Item quantity (0.01-999,999)
+</ParamField>
+
+<ParamField body="items[].unit_price" type="number" required>
+  Price per unit (0-99,999,999.99)
+</ParamField>
+
+<ParamField body="items[].inventory_item_id" type="integer" optional>
+  Link to inventory item
+</ParamField>
+
+<ParamField body="items[].order_id" type="integer" optional>
+  Link to service order
+</ParamField>
+
+**Response:**
+- Redirects to document detail page
+- Success message
+
+**Authorization:** Customer must belong to user's company (if registered)
+
+**Validation:** `StoreBillingDocumentRequest`
+
+**Controller:** `App\Http\Controllers\Worker\BillingController@store`
+
+**Source:** routes/web.php:57-59
+
+---
+
+### View Billing Document
+
+<ParamField path="GET /worker/billing/{document}" type="route">
+  Display full details of a billing document.
+</ParamField>
+
+**Middleware:** `auth`, `role:worker,admin,developer`, `module_access:billing`
+
+**Route Name:** `worker.billing.show`
+
+**URL Parameters:**
+
+<ParamField path="document" type="integer" required>
+  Billing document ID
+</ParamField>
+
+**Response:**
+- Returns view with complete document details
+- Includes all line items with inventory and order links
+- Customer and company information
+
+**Authorization:** Document must belong to user's company
+
+**Controller:** `App\Http\Controllers\Worker\BillingController@show`
+
+**Source:** routes/web.php:63-65
+
+---
+
+### Download PDF
+
+<ParamField path="GET /worker/billing/{document}/pdf" type="route">
+  Download billing document as PDF.
+</ParamField>
+
+**Middleware:** `auth`, `role:worker,admin,developer`, `module_access:billing`
+
+**Route Name:** `worker.billing.pdf`
+
+**URL Parameters:**
+
+<ParamField path="document" type="integer" required>
+  Billing document ID
+</ParamField>
+
+**Response:**
+- Downloads PDF file named with document number
+- A4 paper size
+
+**Authorization:** Document must belong to user's company
+
+**Controller:** `App\Http\Controllers\Worker\BillingController@pdf`
+
+**Source:** routes/web.php:66-68
+
+---
+
+### Get Customer Services
+
+<ParamField path="GET /worker/billing/customers/{customer}/services" type="route">
+  Retrieve all service orders for a customer (JSON endpoint).
+</ParamField>
+
+**Middleware:** `auth`, `role:worker,admin,developer`, `module_access:billing`
+
+**Route Name:** `worker.billing.customer-services`
+
+**URL Parameters:**
+
+<ParamField path="customer" type="integer" required>
+  Customer ID
+</ParamField>
+
+**Response:**
+```json
+{
+  "customer": {
+    "id": 1,
+    "name": "John Doe",
+    "email": "john@example.com"
+  },
+  "orders": [
+    {
+      "id": 123,
+      "description": "Refrigerator repair",
+      "estimated_cost": 150.00,
+      "status": "completed",
+      "status_label": "Completado",
+      "equipment": "Samsung RF28"
+    }
+  ]
+}
+```
+
+**Authorization:** Customer must belong to user's company
+
+**Controller:** `App\Http\Controllers\Worker\BillingController@customerServices`
+
+**Source:** routes/web.php:60-62
+
+---
+
+## Usage Examples
+
+### Creating an Order with AI Diagnosis
+
+```html
+<form method="POST" action="{{ route('worker.orders.store') }}">
+    @csrf
+    <input type="hidden" name="customer_id" value="1">
+    <input type="hidden" name="equipment_id" value="5">
+    <input type="text" name="technician" value="John Tech">
+    <textarea name="symptoms">Refrigerator not cooling, compressor makes noise</textarea>
+    <input type="checkbox" name="request_ai_diagnosis" value="1" checked>
+    <input type="number" name="estimated_cost" value="150">
+    <select name="status">
+        <option value="pending">Pending</option>
+        <option value="in_progress">In Progress</option>
+    </select>
+    <button type="submit">Create Order</button>
+</form>
+```
+
+### Creating a Billing Document
+
+```html
+<form method="POST" action="{{ route('worker.billing.store') }}">
+    @csrf
+    <select name="document_type">
+        <option value="invoice">Invoice</option>
+        <option value="quote">Quote</option>
+    </select>
+    <input type="hidden" name="source" value="repair">
+    <input type="hidden" name="customer_mode" value="registered">
+    <input type="hidden" name="customer_id" value="1">
+    <select name="tax_mode">
+        <option value="included">Tax Included</option>
+        <option value="excluded">Tax Excluded</option>
+    </select>
+    
+    <!-- Line Items -->
+    <input type="hidden" name="items[0][item_kind]" value="service">
+    <input type="text" name="items[0][description]" value="Refrigerator Repair">
+    <input type="number" name="items[0][quantity]" value="1">
+    <input type="number" name="items[0][unit_price]" value="150.00">
+    <input type="hidden" name="items[0][order_id]" value="123">
+    
+    <button type="submit">Generate Document</button>
+</form>
+```
+
+### Adjusting Inventory Stock
+
+```html
+<form method="POST" action="{{ route('worker.inventory.stock', $item) }}">
+    @csrf
+    @method('PATCH')
+    <select name="movement_type">
+        <option value="addition">Add Stock</option>
+        <option value="removal">Remove Stock</option>
+    </select>
+    <input type="number" name="quantity" value="10">
+    <input type="text" name="notes" placeholder="Reason for adjustment">
+    <button type="submit">Update Stock</button>
+</form>
+```

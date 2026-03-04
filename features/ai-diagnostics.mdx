@@ -1,0 +1,395 @@
+---
+title: AI Diagnostics
+description: Understand how the AI diagnostic engine analyzes equipment and estimates repair costs
+---
+
+ElectroFix AI's diagnostic engine analyzes equipment symptoms and provides instant repair guidance to technicians. The system uses heuristic analysis to identify potential causes, suggest parts, estimate time, and calculate costs.
+
+## How It Works
+
+### Input Format
+
+The diagnostic service accepts four parameters:
+
+```php
+public function analyze(
+    string $type,      // e.g., "Refrigerador"
+    string $brand,     // e.g., "Samsung"
+    ?string $model,    // e.g., "RT38K5930SL"
+    string $symptoms   // User-provided description
+): array
+```
+
+### Analysis Process
+
+The service performs keyword-based symptom analysis:
+
+<Steps>
+  <Step title="Normalize Symptoms">
+    Convert input to lowercase for case-insensitive matching:
+    
+    ```php
+    $text = mb_strtolower($symptoms);
+    ```
+  </Step>
+  
+  <Step title="Pattern Detection">
+    Identify key issues using `str_contains()` checks
+  </Step>
+  
+  <Step title="Build Response">
+    Compile causes, parts, time estimate, advice, and costs
+  </Step>
+  
+  <Step title="Return Structured Data">
+    Return array with all diagnostic information
+  </Step>
+</Steps>
+
+## Symptom Patterns
+
+### Power Issues
+
+```php
+if (str_contains($text, 'no enciende') || str_contains($text, 'enciende')) {
+    $causes[] = 'Falla en fuente de alimentación o tarjeta principal.';
+    $parts[] = 'Tarjeta electrónica';
+    $parts[] = 'Fusible térmico';
+    $time = '3-5 horas';
+    $advice = 'Verifica voltajes de entrada/salida antes de reemplazar módulos.';
+    $repairLaborCost = 850.00;
+}
+```
+
+**Triggers**: "no enciende", "enciende"  
+**Time**: 3-5 hours  
+**Labor Cost**: 850.00
+
+### Mechanical Issues
+
+```php
+if (str_contains($text, 'ruido') || str_contains($text, 'vibr')) {
+    $causes[] = 'Desgaste de rodamientos o desbalance mecánico.';
+    $parts[] = 'Rodamientos';
+    $parts[] = 'Soportes antivibración';
+    $time = '2-3 horas';
+    $repairLaborCost = max($repairLaborCost, 700.00);
+}
+```
+
+**Triggers**: "ruido", "vibr" (vibración, vibrando)  
+**Time**: 2-3 hours  
+**Labor Cost**: 700.00
+
+### Fluid Leaks
+
+```php
+if (str_contains($text, 'fuga') || str_contains($text, 'agua')) {
+    $causes[] = 'Deterioro en sellos o mangueras.';
+    $parts[] = 'Kit de sellos';
+    $parts[] = 'Manguera de drenaje';
+    $time = '1-2 horas';
+    $repairLaborCost = max($repairLaborCost, 600.00);
+}
+```
+
+**Triggers**: "fuga", "agua"  
+**Time**: 1-2 hours  
+**Labor Cost**: 600.00
+
+### Default Fallback
+
+When no patterns match:
+
+```php
+if (empty($causes)) {
+    $causes[] = 'Posible combinación de fallo electrónico y desgaste por uso.';
+    $advice = 'Se recomienda mantenimiento preventivo, limpieza técnica y recalibración.';
+    $repairLaborCost = 450.00;
+}
+```
+
+See: `app/Services/AiDiagnosticService.php:7-69`
+
+## Output Format
+
+### Complete Response Structure
+
+```php
+return [
+    'equipment' => 'Samsung Refrigerador RT38K5930SL',
+    'potential_causes' => [
+        'Falla en fuente de alimentación o tarjeta principal.',
+        'Desgaste de rodamientos o desbalance mecánico.'
+    ],
+    'estimated_time' => '3-5 horas',
+    'suggested_parts' => [
+        'Tarjeta electrónica',
+        'Fusible térmico',
+        'Rodamientos',
+        'Soportes antivibración'
+    ],
+    'technical_advice' => 'Verifica voltajes de entrada/salida antes de reemplazar módulos.',
+    'requires_parts_replacement' => true,
+    'cost_suggestion' => [
+        'repair_labor_cost' => 850.00,
+        'replacement_parts_cost' => 1280.00,  // 4 parts × 320.00
+        'replacement_total_cost' => 2130.00
+    ]
+];
+```
+
+### Parts Cost Calculation
+
+```php
+$parts = array_values(array_unique($parts));
+$requiresPartsReplacement = !empty($parts);
+$replacementPartsCost = $requiresPartsReplacement 
+    ? count($parts) * 320.00 
+    : 0.00;
+```
+
+Each unique part adds **320.00** to the estimate.
+
+## Token Usage Tracking
+
+### Estimation Before Analysis
+
+Before sending the diagnostic request, the system estimates token usage:
+
+```php
+$promptChars = $this->promptChars($equipment, $symptoms);
+$projectedPromptTokens = $this->tokenEstimator->estimateFromChars($promptChars);
+
+$this->aiUsageService->validateBeforeUsage(
+    $company, 
+    $plan, 
+    $projectedPromptTokens
+);
+```
+
+Prompt format:
+
+```php
+$prompt = sprintf(
+    'Equipo: %s %s %s. Síntomas: %s',
+    $equipment->type,
+    $equipment->brand,
+    $equipment->model ?? '',
+    $symptoms
+);
+```
+
+### Actual Usage Recording
+
+After receiving the response:
+
+```php
+$responseChars = mb_strlen(json_encode($analysis, JSON_UNESCAPED_UNICODE));
+$totalTokens = $this->tokenEstimator->estimateFromChars($promptChars)
+    + $this->tokenEstimator->estimateFromChars($responseChars);
+
+$this->aiUsageService->validateAfterUsage($company, $plan, $totalTokens);
+```
+
+See: `app/Services/OrderCreationService.php:64-115`
+
+## Plan-Based Limits
+
+<Tabs>
+  <Tab title="Enterprise Plan">
+    **Monthly Limits:**
+    - Query limit: **200 requests**
+    - Token limit: **120,000 tokens**
+    
+    ```php
+    public const PLAN_ENTERPRISE = 'enterprise';
+    
+    private const QUERY_LIMITS = [
+        self::PLAN_ENTERPRISE => 200,
+    ];
+    
+    private const TOKEN_LIMITS = [
+        self::PLAN_ENTERPRISE => 120000,
+    ];
+    ```
+  </Tab>
+  
+  <Tab title="Developer Test Plan">
+    **Monthly Limits:**
+    - Query limit: **500 requests**
+    - Token limit: **500,000 tokens**
+    
+    ```php
+    public const PLAN_DEVELOPER_TEST = 'developer_test';
+    
+    private const QUERY_LIMITS = [
+        self::PLAN_DEVELOPER_TEST => 500,
+    ];
+    
+    private const TOKEN_LIMITS = [
+        self::PLAN_DEVELOPER_TEST => 500000,
+    ];
+    ```
+  </Tab>
+  
+  <Tab title="Starter Plan">
+    **No AI Access**
+    
+    Plans not in the limits array return 0:
+    
+    ```php
+    public function queryLimit(string $plan): int
+    {
+        return self::QUERY_LIMITS[$plan] ?? 0;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+See: `app/Services/AiPlanPolicyService.php:6-34`
+
+## Usage Validation
+
+### Pre-Request Validation
+
+<Accordion title="Plan Support Check">
+  ```php
+  if (!$this->planPolicyService->supportsAi($plan)) {
+      throw new AiUsageException(
+          'blocked_plan', 
+          'Your current plan does not include AI Assistant.'
+      );
+  }
+  ```
+</Accordion>
+
+<Accordion title="Query Quota Check">
+  ```php
+  if ($usage['queries_used'] >= $this->planPolicyService->queryLimit($plan)) {
+      throw new AiUsageException(
+          'blocked_quota', 
+          'Monthly AI query limit reached for your company.'
+      );
+  }
+  ```
+</Accordion>
+
+<Accordion title="Token Quota Check">
+  ```php
+  if (($usage['tokens_used'] + $projectedPromptTokens) > 
+      $this->planPolicyService->tokenLimit($plan)) {
+      throw new AiUsageException(
+          'blocked_tokens', 
+          'Monthly AI consumption limit reached for your company.'
+      );
+  }
+  ```
+</Accordion>
+
+### Post-Response Validation
+
+After getting the actual response, verify token usage again:
+
+```php
+public function validateAfterUsage(
+    Company $company, 
+    string $plan, 
+    int $realTotalTokens, 
+    ?string $yearMonth = null
+): void {
+    $yearMonth ??= now()->format('Y-m');
+    $usage = $this->monthlyUsage($company, $yearMonth);
+    
+    if (($usage['tokens_used'] + $realTotalTokens) > 
+        $this->planPolicyService->tokenLimit($plan)) {
+        throw new AiUsageException(
+            'blocked_tokens', 
+            'Monthly AI consumption limit reached.'
+        );
+    }
+}
+```
+
+See: `app/Services/AiUsageService.php:37-45`
+
+## Usage Recording
+
+### Success Record
+
+When diagnostics complete successfully:
+
+```php
+CompanyAiUsage::create([
+    'company_id' => $company->id,
+    'order_id' => $order->id,
+    'year_month' => now()->format('Y-m'),
+    'plan_snapshot' => $plan,
+    'prompt_chars' => $promptChars,
+    'response_chars' => $responseChars,
+    'prompt_tokens_estimated' => $promptTokens,
+    'response_tokens_estimated' => $responseTokens,
+    'total_tokens_estimated' => $totalTokens,
+    'status' => 'success',
+    'error_message' => null,
+]);
+```
+
+### Blocked Record
+
+When requests are blocked (quota exceeded, plan limitation):
+
+```php
+CompanyAiUsage::create([
+    'company_id' => $company->id,
+    'order_id' => $order?->id,
+    'year_month' => now()->format('Y-m'),
+    'plan_snapshot' => $plan,
+    'prompt_chars' => $promptChars,
+    'response_chars' => $responseChars,
+    'status' => 'blocked_quota', // or 'blocked_tokens', 'blocked_plan'
+    'error_message' => $errorMessage,
+    // ... token estimates
+]);
+```
+
+See: `app/Services/AiUsageService.php:62-115`
+
+## Monthly Usage Calculation
+
+Get current month's usage for a company:
+
+```php
+public function monthlyUsage(Company $company, ?string $yearMonth = null): array
+{
+    $yearMonth ??= now()->format('Y-m');
+    
+    $successRows = CompanyAiUsage::query()
+        ->where('company_id', $company->id)
+        ->where('year_month', $yearMonth)
+        ->where('status', 'success');
+    
+    return [
+        'queries_used' => (int) (clone $successRows)->count(),
+        'tokens_used' => (int) (clone $successRows)->sum('total_tokens_estimated'),
+    ];
+}
+```
+
+Only **successful** requests count toward quotas. Blocked attempts are logged but don't consume quota.
+
+See: `app/Services/AiUsageService.php:47-60`
+
+## Provider Information
+
+Current implementation uses a local heuristic engine:
+
+```php
+$order->update([
+    'ai_provider' => 'local_stub',
+    'ai_model' => 'heuristic-v1',
+    // ...
+]);
+```
+
+These fields are stored for future integration with external AI providers (OpenAI, Anthropic, etc.).

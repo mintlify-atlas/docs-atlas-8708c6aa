@@ -1,0 +1,478 @@
+---
+title: "Database Migrations"
+description: "Complete reference for ElectroFix AI database schema and migrations"
+---
+
+## Overview
+
+ElectroFix AI uses Laravel migrations to manage database schema. Migrations are version control for your database, allowing you to modify and share the application's database schema definition.
+
+## Migration Files
+
+All migrations are located in `database/migrations/` and run in chronological order.
+
+## Running Migrations
+
+### Run All Migrations
+
+```bash
+php artisan migrate
+```
+
+### Run Migrations (Production)
+
+```bash
+php artisan migrate --force
+```
+
+### Rollback Last Migration
+
+```bash
+php artisan migrate:rollback
+```
+
+### Reset All Migrations
+
+```bash
+php artisan migrate:reset
+```
+
+### Refresh Database
+
+```bash
+php artisan migrate:refresh
+```
+
+### Fresh Migration (Drop All Tables)
+
+```bash
+php artisan migrate:fresh
+```
+
+## Migration List
+
+Migrations execute in the following order:
+
+### 1. Core Laravel Tables
+
+#### `0001_01_01_000000_create_users_table.php`
+
+Creates initial user authentication tables.
+
+**Tables Created**:
+- `users` - User accounts
+- `password_reset_tokens` - Password reset tokens
+- `sessions` - User sessions
+
+**users table**:
+- `id` - Primary key
+- `name` - User full name
+- `email` - Unique email address
+- `role` - User role (default: 'worker')
+- `email_verified_at` - Email verification timestamp
+- `password` - Hashed password
+- `remember_token` - Remember me token
+- `timestamps` - created_at, updated_at
+
+#### `0001_01_01_000001_create_cache_table.php`
+
+Creates cache storage tables.
+
+**Tables Created**:
+- `cache` - Cache entries
+- `cache_locks` - Cache locks for atomic operations
+
+#### `0001_01_01_000002_create_jobs_table.php`
+
+Creates queue job tables.
+
+**Tables Created**:
+- `jobs` - Queued jobs
+- `job_batches` - Batch job tracking
+- `failed_jobs` - Failed job records
+
+### 2. Multi-Tenancy Foundation
+
+#### `2026_03_02_000100_create_companies_table.php`
+
+Creates the companies table for multi-tenant architecture.
+
+**Table**: `companies`
+
+**Columns**:
+- `id` - Primary key
+- `name` - Company name
+- `owner_name` - Owner's full name
+- `owner_email` - Owner's email
+- `owner_phone` - Owner's phone number
+- `tax_id` - Tax identification number (RFC in Mexico)
+- `billing_email` - Billing contact email
+- `billing_phone` - Billing contact phone
+- `address_line` - Street address
+- `city` - City
+- `state` - State/province
+- `country` - Country code (default: 'MX')
+- `postal_code` - Postal/ZIP code
+- `currency` - Currency code (default: 'MXN')
+- `notes` - Additional notes
+- `timestamps` - created_at, updated_at
+
+#### `2026_03_02_000200_create_subscriptions_table.php`
+
+Creates subscription management for companies.
+
+**Table**: `subscriptions`
+
+**Columns**:
+- `id` - Primary key
+- `company_id` - Foreign key to companies (unique, cascade delete)
+- `plan` - Enum: 'starter', 'pro', 'enterprise', 'developer_test'
+- `status` - Enum: 'active', 'trial', 'past_due', 'canceled', 'suspended'
+- `starts_at` - Subscription start date
+- `ends_at` - Subscription end date
+- `billing_cycle` - Enum: 'monthly', 'yearly'
+- `user_limit` - Maximum number of users allowed
+- `timestamps` - created_at, updated_at
+
+**Constraints**:
+- One subscription per company
+- Cascade delete when company is deleted
+
+#### `2026_03_02_000300_alter_users_for_multi_tenant_and_permissions.php`
+
+Extends users table for multi-tenancy and permissions.
+
+**Adds to users table**:
+- `company_id` - Foreign key to companies (null on delete)
+- `role` - Modified to enum: 'admin', 'worker', 'developer'
+- `is_active` - Boolean flag for active users
+- `can_access_billing` - Permission for billing module
+- `can_access_inventory` - Permission for inventory module
+- `deleted_at` - Soft delete timestamp
+
+**Indexes**:
+- Composite index on (company_id, role, is_active)
+
+### 3. Core Business Tables
+
+#### `2026_03_02_000400_create_customers_table.php`
+
+Creates customer management table.
+
+**Table**: `customers`
+
+**Columns**:
+- `id` - Primary key
+- `company_id` - Foreign key to companies (cascade delete)
+- `name` - Customer name
+- `email` - Customer email
+- `phone` - Contact phone number
+- `address` - Physical address
+- `timestamps` - created_at, updated_at
+
+**Indexes**:
+- (company_id, name)
+- (company_id, email)
+
+#### `2026_03_02_000500_create_equipments_table.php`
+
+Creates equipment tracking table.
+
+**Table**: `equipments`
+
+**Columns**:
+- `id` - Primary key
+- `company_id` - Foreign key to companies (cascade delete)
+- `customer_id` - Foreign key to customers (cascade delete)
+- `type` - Equipment type (e.g., 'Lavadora', 'Refrigerador')
+- `brand` - Manufacturer brand
+- `model` - Model number/name
+- `serial_number` - Unique serial number
+- `timestamps` - created_at, updated_at
+
+**Indexes**:
+- (company_id, serial_number)
+- (company_id, customer_id)
+
+#### `2026_03_02_000600_create_orders_table.php`
+
+Creates repair order management table.
+
+**Table**: `orders`
+
+**Columns**:
+- `id` - Primary key
+- `company_id` - Foreign key to companies (cascade delete)
+- `customer_id` - Foreign key to customers (cascade delete)
+- `equipment_id` - Foreign key to equipments (cascade delete)
+- `technician` - Assigned technician name
+- `symptoms` - Reported symptoms/issues
+- `status` - Enum: 'received', 'diagnostic', 'repairing', 'quote', 'ready', 'delivered', 'not_repaired'
+- `estimated_cost` - Estimated repair cost (decimal 12,2)
+- `ai_potential_causes` - JSON array of AI-suggested causes
+- `ai_estimated_time` - AI-estimated repair time
+- `ai_suggested_parts` - JSON array of suggested parts
+- `ai_technical_advice` - AI-generated technical advice
+- `timestamps` - created_at, updated_at
+
+**Indexes**:
+- (company_id, status, created_at)
+
+### 4. Inventory Management
+
+#### `2026_03_02_000700_create_inventory_items_table.php`
+
+Creates inventory item management.
+
+**Table**: `inventory_items`
+
+**Columns**:
+- `id` - Primary key
+- `company_id` - Foreign key to companies (cascade delete)
+- `name` - Item name
+- `internal_code` - Internal SKU/code (max 120 chars)
+- `quantity` - Current stock quantity
+- `low_stock_threshold` - Minimum stock alert level (default: 5)
+- `is_sale_enabled` - Can be sold directly to customers
+- `sale_price` - Sale price (decimal 12,2, nullable)
+- `timestamps` - created_at, updated_at
+
+**Constraints**:
+- Unique (company_id, internal_code)
+
+**Indexes**:
+- (company_id, quantity)
+
+#### `2026_03_02_000710_create_inventory_movements_table.php`
+
+Creates inventory movement tracking.
+
+**Table**: `inventory_movements`
+
+**Columns**:
+- `id` - Primary key
+- `company_id` - Foreign key to companies (cascade delete)
+- `inventory_item_id` - Foreign key to inventory_items (cascade delete)
+- `order_id` - Optional foreign key to orders (null on delete)
+- `user_id` - Foreign key to users (cascade delete)
+- `movement_type` - Enum: 'purchase', 'adjustment', 'sale', 'use_in_repair', 'return'
+- `quantity_change` - Signed integer (positive or negative)
+- `reason` - Reason for movement
+- `timestamps` - created_at, updated_at
+
+**Indexes**:
+- (company_id, created_at)
+- (inventory_item_id)
+
+#### `2026_03_02_000720_create_notifications_table.php`
+
+Creates system notifications.
+
+**Table**: `notifications`
+
+**Columns**:
+- `id` - UUID primary key
+- `type` - Notification class name
+- `notifiable_type` - Polymorphic type (User, Company)
+- `notifiable_id` - Polymorphic ID
+- `data` - JSON notification data
+- `read_at` - Timestamp when read
+- `created_at` - When notification was created
+
+**Indexes**:
+- (notifiable_type, notifiable_id)
+
+### 5. Billing System
+
+#### `2026_03_02_000800_add_vat_percentage_to_companies_table.php`
+
+Adds VAT configuration to companies.
+
+**Adds to companies table**:
+- `vat_percentage` - Default VAT/IVA percentage (decimal 5,2, default: 16.00)
+
+#### `2026_03_02_000810_create_billing_documents_table.php`
+
+Creates billing document management.
+
+**Table**: `billing_documents`
+
+**Columns**:
+- `id` - Primary key
+- `company_id` - Foreign key to companies (cascade delete)
+- `user_id` - Foreign key to users who created it (cascade delete)
+- `customer_id` - Optional foreign key to customers (null on delete)
+- `document_number` - Unique document number (max 40 chars)
+- `document_type` - Enum: 'quote', 'invoice'
+- `customer_mode` - Enum: 'registered', 'walk_in'
+- `walk_in_name` - Name for walk-in customers (max 180 chars)
+- `source` - Enum: 'repair', 'sale', 'mixed'
+- `tax_mode` - Enum: 'included', 'excluded'
+- `vat_percentage` - VAT percentage applied (decimal 5,2)
+- `subtotal` - Subtotal before tax (decimal 12,2)
+- `vat_amount` - Tax amount (decimal 12,2)
+- `total` - Total amount including tax (decimal 12,2)
+- `notes` - Additional notes
+- `issued_at` - Document issue timestamp
+- `timestamps` - created_at, updated_at
+
+**Constraints**:
+- Unique (company_id, document_number)
+
+**Indexes**:
+- (company_id, document_type, created_at)
+
+#### `2026_03_02_000820_create_billing_document_items_table.php`
+
+Creates line items for billing documents.
+
+**Table**: `billing_document_items`
+
+**Columns**:
+- `id` - Primary key
+- `billing_document_id` - Foreign key to billing_documents (cascade delete)
+- `inventory_item_id` - Optional foreign key to inventory_items (null on delete)
+- `item_kind` - Enum: 'service', 'product'
+- `description` - Item description
+- `quantity` - Quantity (decimal 10,2)
+- `unit_price` - Price per unit (decimal 12,2)
+- `line_subtotal` - Line subtotal (decimal 12,2)
+- `line_vat` - Line VAT amount (decimal 12,2)
+- `line_total` - Line total (decimal 12,2)
+- `timestamps` - created_at, updated_at
+
+**Indexes**:
+- (billing_document_id)
+
+#### `2026_03_02_000830_add_order_id_to_billing_document_items_table.php`
+
+Links billing items to repair orders.
+
+**Adds to billing_document_items table**:
+- `order_id` - Optional foreign key to orders (null on delete)
+
+### 6. AI Tracking & Analytics
+
+#### `2026_03_03_000900_add_ai_tracking_columns_to_orders_table.php`
+
+Adds AI usage tracking to orders.
+
+**Adds to orders table**:
+- `ai_diagnosed_at` - Timestamp when AI diagnosis ran
+- `ai_tokens_used` - Number of tokens consumed
+- `ai_provider` - AI provider name (max 80 chars)
+- `ai_model` - AI model used (max 120 chars)
+- `ai_requires_parts_replacement` - Boolean flag
+- `ai_cost_repair_labor` - Estimated labor cost (decimal 12,2)
+- `ai_cost_replacement_parts` - Estimated parts cost (decimal 12,2)
+- `ai_cost_replacement_total` - Total estimated cost (decimal 12,2)
+
+**Indexes**:
+- (company_id, ai_diagnosed_at)
+
+#### `2026_03_03_001000_create_company_ai_usages_table.php`
+
+Creates AI usage analytics and quota tracking.
+
+**Table**: `company_ai_usages`
+
+**Columns**:
+- `id` - Primary key
+- `company_id` - Foreign key to companies (cascade delete)
+- `order_id` - Optional foreign key to orders (null on delete)
+- `year_month` - Period identifier (YYYY-MM format, 7 chars)
+- `plan_snapshot` - Plan at time of usage (max 40 chars)
+- `prompt_chars` - Character count of prompt
+- `response_chars` - Character count of response
+- `prompt_tokens_estimated` - Estimated tokens in prompt
+- `response_tokens_estimated` - Estimated tokens in response
+- `total_tokens_estimated` - Total estimated tokens
+- `status` - Enum: 'success', 'blocked_plan', 'blocked_quota', 'blocked_tokens', 'error'
+- `error_message` - Error details if failed
+- `timestamps` - created_at, updated_at
+
+**Indexes**:
+- (company_id, year_month)
+- (company_id, status)
+- (order_id)
+
+## Database Schema Overview
+
+### Relationships
+
+```
+companies (1) -----> (*) subscriptions
+companies (1) -----> (*) users
+companies (1) -----> (*) customers
+companies (1) -----> (*) equipments
+companies (1) -----> (*) orders
+companies (1) -----> (*) inventory_items
+companies (1) -----> (*) billing_documents
+companies (1) -----> (*) company_ai_usages
+
+customers (1) -----> (*) equipments
+customers (1) -----> (*) orders
+
+equipments (1) ----> (*) orders
+
+inventory_items (1) -> (*) inventory_movements
+inventory_items (1) -> (*) billing_document_items
+
+orders (1) --------> (*) inventory_movements
+orders (1) --------> (*) company_ai_usages
+orders (1) --------> (*) billing_document_items
+
+billing_documents (1) -> (*) billing_document_items
+
+users (1) ---------> (*) billing_documents
+users (1) ---------> (*) inventory_movements
+```
+
+### Multi-Tenancy
+
+All business data is scoped by `company_id`, ensuring complete data isolation between companies:
+
+- customers
+- equipments
+- orders
+- inventory_items
+- inventory_movements
+- billing_documents
+- company_ai_usages
+
+### Cascade Behavior
+
+**Cascade Delete** (when parent is deleted, children are deleted):
+- Company → All related records
+- Customer → Equipments, Orders
+- Equipment → Orders
+- Inventory Item → Movements
+- Billing Document → Billing Document Items
+
+**Null on Delete** (foreign key set to null):
+- Order deletion → Inventory Movements, Billing Items, AI Usages
+- Customer deletion → Billing Documents
+- Inventory Item deletion → Billing Document Items
+
+## Migration Dependencies
+
+Migrations must run in order due to foreign key dependencies:
+
+1. Core tables (users, cache, jobs)
+2. Companies
+3. Subscriptions (depends on companies)
+4. Users extensions (depends on companies)
+5. Customers (depends on companies)
+6. Equipments (depends on companies, customers)
+7. Orders (depends on companies, customers, equipments)
+8. Inventory (depends on companies)
+9. Inventory movements (depends on inventory, orders, users)
+10. Billing documents (depends on companies, users, customers)
+11. Billing items (depends on billing_documents, inventory, orders)
+12. AI tracking (depends on orders, companies)
+
+## Next Steps
+
+- [Seeders Reference](/deployment/seeders) - Learn about demo data structure
+- [Configuration Guide](/deployment/configuration) - Database configuration
+- [Local Development](/deployment/local-development) - Run migrations locally

@@ -1,0 +1,249 @@
+---
+title: 'User Model'
+description: 'API reference for the User model in ElectroFix'
+---
+
+## Overview
+
+The User model represents individual users within a company. It extends Laravel's Authenticatable class and includes role-based access control, module permissions, and soft delete functionality.
+
+## Properties
+
+### Fillable Attributes
+
+<ParamField path="name" type="string" required>
+  Full name of the user
+</ParamField>
+
+<ParamField path="email" type="string" required>
+  Email address (used for authentication)
+</ParamField>
+
+<ParamField path="company_id" type="integer" required>
+  Foreign key to the Company this user belongs to
+</ParamField>
+
+<ParamField path="role" type="string" required>
+  User role (e.g., 'admin', 'developer', 'worker')
+</ParamField>
+
+<ParamField path="is_active" type="boolean">
+  Whether the user account is active
+</ParamField>
+
+<ParamField path="can_access_billing" type="boolean">
+  Permission flag for billing module access
+</ParamField>
+
+<ParamField path="can_access_inventory" type="boolean">
+  Permission flag for inventory module access
+</ParamField>
+
+<ParamField path="password" type="string">
+  Hashed password for authentication
+</ParamField>
+
+### Hidden Attributes
+
+The following attributes are hidden from serialization:
+
+```php
+protected $hidden = [
+    'password',
+    'remember_token',
+];
+```
+
+## Casts
+
+```php
+protected function casts(): array
+{
+    return [
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
+        'is_active' => 'boolean',
+        'can_access_billing' => 'boolean',
+        'can_access_inventory' => 'boolean',
+    ];
+}
+```
+
+- `email_verified_at`: Automatically cast to Carbon datetime instance
+- `password`: Automatically hashed when set
+- Boolean flags are cast to true/false values
+
+## Relationships
+
+### company()
+
+**Type:** `BelongsTo`
+
+Returns the company this user belongs to.
+
+```php
+public function company(): BelongsTo
+{
+    return $this->belongsTo(Company::class);
+}
+```
+
+### inventoryMovements()
+
+**Type:** `HasMany`
+
+Returns all inventory movements created by this user.
+
+```php
+public function inventoryMovements(): HasMany
+{
+    return $this->hasMany(InventoryMovement::class);
+}
+```
+
+### billingDocuments()
+
+**Type:** `HasMany`
+
+Returns all billing documents created by this user.
+
+```php
+public function billingDocuments(): HasMany
+{
+    return $this->hasMany(BillingDocument::class);
+}
+```
+
+## Methods
+
+### isRole()
+
+Check if user has a specific role.
+
+```php
+public function isRole(string $role): bool
+{
+    return $this->role === $role;
+}
+```
+
+**Parameters:**
+- `$role` (string): Role name to check
+
+**Returns:** `bool` - True if user has the specified role
+
+### canAccessModule()
+
+Determine if user can access a specific module based on role and permissions.
+
+```php
+public function canAccessModule(string $module): bool
+{
+    if ($this->isRole('admin') || $this->isRole('developer')) {
+        return true;
+    }
+
+    if (! $this->isRole('worker')) {
+        return false;
+    }
+
+    return match ($module) {
+        'billing' => $this->can_access_billing,
+        'inventory' => $this->can_access_inventory,
+        default => true,
+    };
+}
+```
+
+**Parameters:**
+- `$module` (string): Module name ('billing', 'inventory', etc.)
+
+**Returns:** `bool` - True if user can access the module
+
+**Logic:**
+- Admins and developers have access to all modules
+- Workers must have specific permission flags set
+- Unknown modules default to true for workers
+
+### scopeForCompany()
+
+Query scope to filter users by company.
+
+```php
+public function scopeForCompany(Builder $query, ?int $companyId): Builder
+{
+    return $query->where('company_id', $companyId);
+}
+```
+
+**Parameters:**
+- `$query` (Builder): Query builder instance
+- `$companyId` (int|null): Company ID to filter by
+
+**Returns:** `Builder` - Modified query builder
+
+## Traits
+
+- `HasFactory`: Enables model factories for testing
+- `Notifiable`: Allows sending notifications to users
+- `SoftDeletes`: Enables soft deletion (deleted_at timestamp)
+
+## Usage Examples
+
+### Creating a New User
+
+```php
+$user = User::create([
+    'name' => 'Jane Smith',
+    'email' => 'jane@example.com',
+    'company_id' => 1,
+    'role' => 'worker',
+    'is_active' => true,
+    'can_access_billing' => true,
+    'can_access_inventory' => false,
+    'password' => 'secure-password',
+]);
+```
+
+### Checking User Permissions
+
+```php
+// Check if user is admin
+if ($user->isRole('admin')) {
+    // Grant admin access
+}
+
+// Check module access
+if ($user->canAccessModule('billing')) {
+    // Show billing module
+}
+```
+
+### Querying Users by Company
+
+```php
+// Get all active users for a company
+$users = User::forCompany($companyId)
+    ->where('is_active', true)
+    ->get();
+```
+
+### Accessing User Relationships
+
+```php
+// Get user's company
+$company = $user->company;
+
+// Get all billing documents created by user
+$documents = $user->billingDocuments;
+
+// Get inventory movements with item details
+$movements = $user->inventoryMovements()
+    ->with('inventoryItem')
+    ->latest()
+    ->get();
+```
+
+## Source Reference
+
+Model file: `/home/daytona/workspace/source/app/Models/User.php`

@@ -1,0 +1,275 @@
+---
+title: Service Orders
+description: Complete guide to service order management and AI-powered diagnostics
+---
+
+Service orders are the core of ElectroFix AI's repair workflow. This module handles the entire lifecycle from intake to delivery, with integrated AI diagnostics to accelerate technician decision-making.
+
+## Order Lifecycle
+
+Service orders follow a structured workflow with seven distinct statuses:
+
+<CardGroup cols={2}>
+  <Card title="Received" icon="inbox">
+    Initial status when order is created
+  </Card>
+  <Card title="Diagnostic" icon="magnifying-glass">
+    Equipment is being analyzed
+  </Card>
+  <Card title="Repairing" icon="wrench">
+    Active repair in progress
+  </Card>
+  <Card title="Quote" icon="file-invoice">
+    Awaiting customer approval
+  </Card>
+  <Card title="Ready" icon="circle-check">
+    Repair complete, ready for pickup
+  </Card>
+  <Card title="Delivered" icon="truck">
+    Returned to customer
+  </Card>
+  <Card title="Not Repaired" icon="circle-xmark">
+    Could not be repaired
+  </Card>
+</CardGroup>
+
+### Status Transitions
+
+Orders can be updated manually or automatically based on billing events:
+
+```php
+// Manual status update
+$order->update(['status' => OrderStatus::REPAIRING]);
+```
+
+**Automatic transitions** occur when creating billing documents:
+- **Quote document** → Sets linked orders to `quote` status
+- **Invoice document** → Sets linked orders to `ready` status
+
+See implementation: `app/Services/BillingService.php:193-214`
+
+## Creating Service Orders
+
+### Basic Order Creation
+
+Orders require a customer, equipment, and optional symptom description:
+
+```php
+Order::create([
+    'company_id' => $customer->company_id,
+    'customer_id' => $customer->id,
+    'equipment_id' => $equipment->id,
+    'technician' => $technician->name,
+    'symptoms' => 'Device not turning on, clicking noise',
+    'status' => OrderStatus::RECEIVED,
+    'estimated_cost' => 0,
+]);
+```
+
+### Validation Rules
+
+From `app/Http/Requests/StoreOrderRequest.php:16-28`:
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `customer_id` | integer | Required, must exist |
+| `equipment_id` | integer | Required, must exist |
+| `technician` | string | Optional, max 255 chars |
+| `technician_user_id` | integer | Optional for admin assignment |
+| `symptoms` | string | 5-600 chars, required if AI requested |
+| `request_ai_diagnosis` | boolean | Triggers AI analysis |
+| `estimated_cost` | numeric | Optional, min 0 |
+
+## Technician Assignment
+
+<Tabs>
+  <Tab title="Worker Role">
+    When a worker creates an order, they are automatically assigned as the technician:
+    
+    ```php
+    if ($actor->role === 'worker') {
+        return $actor->name;
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Admin Role">
+    Admins can assign any active worker or admin from their company:
+    
+    ```php
+    $technician = User::query()
+        ->where('id', $technicianId)
+        ->where('company_id', $companyId)
+        ->whereIn('role', ['worker', 'admin'])
+        ->where('is_active', true)
+        ->first();
+    
+    if (!$technician) {
+        abort(422, 'Must select an active technician');
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Developer Role">
+    Developers can specify any technician name or default to their own name.
+  </Tab>
+</Tabs>
+
+See: `app/Services/OrderCreationService.php:154-183`
+
+## AI Diagnostic Integration
+
+### Requesting AI Diagnosis
+
+When creating an order with `request_ai_diagnosis` enabled, the system:
+
+1. **Validates plan eligibility** - Only `enterprise` and `developer_test` plans have access
+2. **Checks monthly quotas** - Ensures query and token limits aren't exceeded
+3. **Estimates token usage** before sending request
+4. **Analyzes equipment and symptoms** via AiDiagnosticService
+5. **Validates actual usage** after response
+6. **Stores results** in order fields
+
+### AI Response Data
+
+Successful diagnostics populate these order fields:
+
+```php
+$order->update([
+    'ai_potential_causes' => ['array of potential issues'],
+    'ai_estimated_time' => '2-4 hours',
+    'ai_suggested_parts' => ['list of parts'],
+    'ai_technical_advice' => 'advice string',
+    'ai_diagnosed_at' => now(),
+    'ai_tokens_used' => 1250,
+    'ai_provider' => 'local_stub',
+    'ai_model' => 'heuristic-v1',
+    'ai_requires_parts_replacement' => true,
+    'ai_cost_repair_labor' => 850.00,
+    'ai_cost_replacement_parts' => 640.00,
+    'ai_cost_replacement_total' => 1490.00,
+]);
+```
+
+### One-Time Diagnostic Rule
+
+Each order can only use AI diagnostics **once**:
+
+```php
+if ($order->ai_diagnosed_at) {
+    return [
+        'order' => $order,
+        'ai_applied' => false,
+        'ai_warning' => 'This order already used its AI diagnosis.',
+    ];
+}
+```
+
+See: `app/Services/OrderCreationService.php:54-59`
+
+## Cost Estimation
+
+The AI diagnostic service provides three cost components:
+
+<Accordion title="Labor Cost">
+  Base cost for repair work, varies by symptom complexity:
+  
+  - **Power issues**: 850.00
+  - **Mechanical issues**: 700.00
+  - **Fluid leaks**: 600.00
+  - **Default**: 450.00
+  
+  ```php
+  if (str_contains($text, 'no enciende')) {
+      $repairLaborCost = 850.00;
+  }
+  ```
+</Accordion>
+
+<Accordion title="Parts Cost">
+  Calculated per suggested part:
+  
+  ```php
+  $replacementPartsCost = count($parts) * 320.00;
+  ```
+  
+  Each identified part adds 320.00 to the estimate.
+</Accordion>
+
+<Accordion title="Total Estimate">
+  Sum of labor and parts when replacement is required:
+  
+  ```php
+  $replacementTotalCost = $requiresPartsReplacement
+      ? round($replacementPartsCost + $repairLaborCost, 2)
+      : 0.00;
+  ```
+</Accordion>
+
+See: `app/Services/AiDiagnosticService.php:7-69`
+
+## Business Rules
+
+### Cross-Company Restrictions
+
+Customer and equipment must belong to the same company:
+
+```php
+if ($customer->company_id !== $equipment->company_id) {
+    abort(422, 'Customer and equipment must belong to same company.');
+}
+```
+
+### Authorization
+
+Non-developer users can only create orders within their own company:
+
+```php
+if ($actor->role !== 'developer' && $customer->company_id !== $actor->company_id) {
+    abort(403, 'Cannot create orders outside your company.');
+}
+```
+
+## Search and Filtering
+
+Orders can be searched by multiple criteria:
+
+```php
+$orders->where(function ($q) use ($search) {
+    $q->where('id', $search)
+        ->orWhere('technician', 'like', "%{$search}%")
+        ->orWhereHas('customer', function ($cq) use ($search) {
+            $cq->where('name', 'like', "%{$search}%");
+        })
+        ->orWhereHas('equipment', function ($eq) use ($search) {
+            $eq->where('brand', 'like', "%{$search}%")
+                ->orWhere('model', 'like', "%{$search}%");
+        });
+});
+```
+
+See: `app/Http/Controllers/Worker/OrderController.php:53-64`
+
+## Relations
+
+Service orders maintain relationships with:
+
+- **Company** - The business managing the repair
+- **Customer** - Equipment owner
+- **Equipment** - Device being serviced
+- **Billing Items** - Invoice/quote line items
+- **AI Usages** - Diagnostic usage history
+
+```php
+public function equipment(): BelongsTo
+{
+    return $this->belongsTo(Equipment::class);
+}
+
+public function billingItems(): HasMany
+{
+    return $this->hasMany(BillingDocumentItem::class);
+}
+```
+
+See: `app/Models/Order.php:50-73`

@@ -1,0 +1,472 @@
+---
+title: Company Settings
+description: Configure your company profile, contact information, and billing details
+---
+
+## Overview
+
+Company Settings allow administrators to manage their organization's profile, contact information, tax details, and billing configuration. These settings affect how your company appears on invoices, quotes, and system-wide operations.
+
+<Warning>
+  Only users with the **admin** role can access and modify company settings. Workers cannot view or edit this information.
+</Warning>
+
+## Accessing Company Settings
+
+Navigate to **Admin** → **Datos de empresa** (Company Settings) from the main menu. The company settings form will display with all current values.
+
+## Company Information Fields
+
+### Basic Information
+
+<ParamField path="name" type="string" required>
+  **Company Name**
+  
+  Your business's legal or trading name.
+  - Maximum 255 characters
+  - Appears on all invoices and quotes
+  - Displays in dashboard header
+  
+  **Example**: "ElectroServicios del Norte S.A. de C.V."
+</ParamField>
+
+<ParamField path="owner_name" type="string" required>
+  **Owner Name**
+  
+  Full name of the business owner or primary contact.
+  - Maximum 255 characters
+  - Used for legal documentation
+  - Appears in developer insights
+  
+  **Example**: "Carlos Mendoza García"
+</ParamField>
+
+<ParamField path="owner_email" type="email" required>
+  **Owner Email**
+  
+  Primary email address for the business owner.
+  - Must be valid email format
+  - Maximum 255 characters
+  - Receives important system notifications
+  
+  **Example**: "carlos@electroservicios.mx"
+</ParamField>
+
+<ParamField path="owner_phone" type="string" required>
+  **Owner Phone**
+  
+  Primary contact phone number.
+  - Maximum 50 characters
+  - Include country code for international numbers
+  - Used for account recovery and support
+  
+  **Example**: "+52 81 8888 9999"
+</ParamField>
+
+### Tax and Billing Information
+
+<ParamField path="tax_id" type="string">
+  **RFC/NIT (Tax ID)**
+  
+  Your company's tax identification number.
+  - Maximum 120 characters
+  - Optional but recommended
+  - Required for formal invoicing in many jurisdictions
+  - Format varies by country (RFC in Mexico, NIT in Colombia, etc.)
+  
+  **Example**: "MEGC850101AB1" (Mexico RFC format)
+</ParamField>
+
+<ParamField path="billing_email" type="email">
+  **Billing Email**
+  
+  Email address for billing and accounting communications.
+  - Maximum 255 characters
+  - Can be different from owner email
+  - Receives subscription and payment notifications
+  
+  **Example**: "facturacion@electroservicios.mx"
+</ParamField>
+
+<ParamField path="billing_phone" type="string">
+  **Billing Phone**
+  
+  Phone number for billing department.
+  - Maximum 50 characters
+  - Optional
+  - Used for payment-related calls
+  
+  **Example**: "+52 81 8888 9998"
+</ParamField>
+
+### Physical Address
+
+<ParamField path="address_line" type="string">
+  **Address Line**
+  
+  Street address including number and suite/unit.
+  - Maximum 255 characters
+  - Appears on printed invoices
+  
+  **Example**: "Av. Constitución 1234, Local 5"
+</ParamField>
+
+<ParamField path="city" type="string">
+  **City**
+  
+  City or municipality name.
+  - Maximum 120 characters
+  
+  **Example**: "Monterrey"
+</ParamField>
+
+<ParamField path="state" type="string">
+  **State / Province**
+  
+  State, province, or region.
+  - Maximum 120 characters
+  
+  **Example**: "Nuevo León"
+</ParamField>
+
+<ParamField path="country" type="string" required>
+  **Country**
+  
+  Two-letter ISO country code.
+  - Exactly 2 characters
+  - Required field
+  - Use standard ISO 3166-1 alpha-2 codes
+  
+  **Examples**: 
+  - "MX" for Mexico
+  - "US" for United States
+  - "CO" for Colombia
+  - "ES" for Spain
+</ParamField>
+
+<ParamField path="postal_code" type="string">
+  **Postal Code**
+  
+  ZIP or postal code.
+  - Maximum 20 characters
+  
+  **Example**: "64000"
+</ParamField>
+
+### Financial Configuration
+
+<ParamField path="currency" type="string" required>
+  **Currency**
+  
+  Three-letter ISO currency code.
+  - Exactly 3 characters
+  - Required field
+  - Used for all pricing and invoices
+  - Cannot be changed after orders exist (consult support)
+  
+  **Examples**:
+  - "MXN" for Mexican Peso
+  - "USD" for US Dollar
+  - "EUR" for Euro
+  - "COP" for Colombian Peso
+</ParamField>
+
+<ParamField path="vat_percentage" type="number" required>
+  **VAT Percentage**
+  
+  Value-added tax rate for your region.
+  - Decimal value (e.g., 16.00 for 16%)
+  - Minimum: 0
+  - Maximum: 100
+  - Required field
+  - Applied to all invoices and quotes
+  
+  **Common Values**:
+  - 16.00 (Mexico IVA)
+  - 21.00 (Spain IVA)
+  - 19.00 (Colombia IVA)
+  - 0.00 (if VAT-exempt)
+  
+  <Note>
+    This rate is stored with each invoice at time of creation, so historical documents maintain their original VAT rate even if you change this setting later.
+  </Note>
+</ParamField>
+
+### Additional Information
+
+<ParamField path="notes" type="text">
+  **Internal Notes**
+  
+  Free-form text for internal company notes.
+  - No character limit
+  - Not displayed to customers
+  - Useful for:
+    - Account history
+    - Special configurations
+    - Contact preferences
+    - Custom requirements
+</ParamField>
+
+## Updating Company Settings
+
+<Steps>
+  <Step title="Navigate to Company Settings">
+    Go to **Admin** → **Datos de empresa** from the main menu.
+  </Step>
+
+  <Step title="Edit Fields">
+    Update any fields you need to change. All current values are pre-filled in the form.
+  </Step>
+
+  <Step title="Validate Required Fields">
+    Ensure all required fields are filled:
+    - Company name
+    - Owner name, email, and phone
+    - Country (2-letter code)
+    - Currency (3-letter code)
+    - VAT percentage
+  </Step>
+
+  <Step title="Save Changes">
+    Click **Guardar cambios** (Save Changes) at the bottom of the form.
+    
+    The system will:
+    - Validate all field formats
+    - Check required fields
+    - Display success message
+    - Update company record immediately
+  </Step>
+</Steps>
+
+<Note>
+  Changes take effect immediately across the entire system. Existing documents (invoices, quotes) retain their original company information as it was when they were created.
+</Note>
+
+## How Company Settings Are Used
+
+### Invoices and Quotes
+
+Company information appears on all generated PDFs:
+- Company name as header
+- Full address block
+- Tax ID for legal compliance
+- Contact information
+- VAT percentage in calculations
+
+### Dashboard
+
+- Company name displays in navigation header
+- Identifies the active organization for multi-company systems
+
+### Subscriptions
+
+Billing email receives:
+- Subscription renewal notices
+- Payment receipts
+- Plan upgrade/downgrade confirmations
+
+### Currency and VAT
+
+- All prices display in configured currency
+- VAT applies to billing documents automatically
+- Order estimates use currency symbol
+- Inventory sale prices use currency
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Keep Contact Information Current">
+    Regularly verify:
+    - Owner email is monitored daily
+    - Phone numbers are active
+    - Billing contacts receive emails
+    - Address matches physical location
+    
+    Outdated contact info can cause:
+    - Missed subscription renewals
+    - Failed account recovery
+    - Lost customer communications
+  </Accordion>
+  
+  <Accordion title="Use Complete Legal Information">
+    For professional invoicing:
+    - Include full legal business name
+    - Add tax ID (RFC/NIT) for compliance
+    - Provide complete address
+    - Match information to business registration
+    
+    This ensures invoices are legally valid for customer tax deductions.
+  </Accordion>
+  
+  <Accordion title="Set Correct VAT Rate">
+    Verify VAT percentage with your accountant:
+    - Standard rate varies by country
+    - Some services may have reduced rates
+    - VAT-exempt businesses should use 0.00
+    - Changes don't affect existing invoices
+    
+    Incorrect VAT causes accounting problems and potential audits.
+  </Accordion>
+  
+  <Accordion title="Choose Currency Carefully">
+    Currency should match:
+    - Your primary business transactions
+    - Local legal requirements
+    - Bank account currency
+    - Customer expectations
+    
+    <Warning>
+      Changing currency after creating orders, invoices, or inventory can cause data inconsistencies. Plan carefully before setting up.
+    </Warning>
+  </Accordion>
+  
+  <Accordion title="Use Notes for Custom Configuration">
+    Document in notes:
+    - Special accounting procedures
+    - Custom report requirements
+    - Integration details
+    - Subscription history
+    - Important dates (renewal, migration, etc.)
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### Cannot Save - Validation Errors
+
+**Required Field Missing**
+
+Ensure these fields are filled:
+- Name, Owner Name, Owner Email, Owner Phone
+- Country (exactly 2 characters)
+- Currency (exactly 3 characters)
+- VAT Percentage (number between 0-100)
+
+**Invalid Email Format**
+
+Check that email addresses:
+- Contain @ symbol
+- Have valid domain
+- Don't have spaces
+- Use proper format: name@domain.com
+
+**Invalid Country/Currency Code**
+
+Verify you're using:
+- ISO 3166-1 alpha-2 for country (MX, US, CO)
+- ISO 4217 for currency (MXN, USD, EUR)
+- Uppercase letters only
+
+### VAT Not Calculating Correctly
+
+**Cause**: VAT percentage entered incorrectly.
+
+**Solution**:
+- Enter 16 for 16% VAT (not 0.16)
+- System automatically divides by 100 in calculations
+- Update company settings and create new test invoice
+
+### Company Name Not Appearing on Invoices
+
+**Possible Causes**:
+- Changes made after invoice was created
+- PDF generation cache issue
+- Empty company name field
+
+**Solution**:
+1. Verify company name is saved in settings
+2. Create a new invoice to test
+3. Existing invoices retain original company info
+4. Contact support if new invoices still show old name
+
+### Cannot Access Company Settings
+
+**Cause**: Only admins can access this page.
+
+**Solution**:
+- Verify your role is "admin" (not "worker")
+- Check with company owner to upgrade your role
+- Workers cannot view or edit company settings
+
+## Impact on Other Modules
+
+### Billing Module
+- VAT percentage applies to all new quotes and invoices
+- Company info appears on PDF documents
+- Currency displays in document totals
+
+### Inventory Module
+- Sale prices use company currency
+- Currency symbol shows in price fields
+
+### Orders Module
+- Estimated costs display in company currency
+- Company technicians linked to company record
+
+### Subscription Module
+- Billing email receives renewal notices
+- Company details used for subscription management
+
+### Multi-Tenancy
+- Each company has isolated settings
+- Workers only see their company's configuration
+- Admins can only edit their own company
+- Developers can view all companies (read-only in this interface)
+
+## Technical Reference
+
+### Controller Action
+
+- **Edit**: `GET /admin/company/edit` - Display company settings form
+- **Update**: `PUT /admin/company/update` - Save company changes
+
+### Data Model
+
+```php
+[
+  'name',              // Company name (max 255, required)
+  'owner_name',        // Owner name (max 255, required)
+  'owner_email',       // Owner email (email format, max 255, required)
+  'owner_phone',       // Owner phone (max 50, required)
+  'tax_id',            // Tax ID/RFC/NIT (max 120)
+  'billing_email',     // Billing email (email format, max 255)
+  'billing_phone',     // Billing phone (max 50)
+  'address_line',      // Street address (max 255)
+  'city',              // City name (max 120)
+  'state',             // State/province (max 120)
+  'country',           // ISO country code (exactly 2 chars, required)
+  'postal_code',       // Postal code (max 20)
+  'currency',          // ISO currency code (exactly 3 chars, required)
+  'vat_percentage',    // VAT rate (decimal 0-100, required)
+  'notes',             // Internal notes (text, unlimited)
+]
+```
+
+### Authorization
+
+Only users with `role === 'admin'` can:
+- View the edit form
+- Submit updates
+
+The controller enforces:
+
+```php
+public function authorize(): bool
+{
+    return $this->user()?->role === 'admin';
+}
+```
+
+### Relationships
+
+- **Has One**: Subscription
+- **Has Many**: Users (admins and workers)
+- **Has Many**: Customers, Equipment, Orders, Inventory, Billing Documents
+
+All operational data is scoped to the company.
+
+## Related Features
+
+- [Subscription Management](/guides/admin/subscription) - Manage your plan and billing cycle
+- [Worker Management](/guides/admin/worker-management) - Add team members to your company
+- [Billing & Invoices](/guides/worker/billing) - Create invoices using company settings

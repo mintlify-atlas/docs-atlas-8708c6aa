@@ -1,0 +1,331 @@
+---
+title: 'Equipment Model'
+description: 'API reference for the Equipment model in ElectroFix'
+---
+
+## Overview
+
+The Equipment model represents electronic devices and appliances brought in for repair. Each piece of equipment belongs to both a company and a customer, and can have multiple repair orders associated with it.
+
+## Properties
+
+### Table Name
+
+```php
+protected $table = 'equipments';
+```
+
+### Fillable Attributes
+
+<ParamField path="company_id" type="integer" required>
+  Foreign key to the Company managing this equipment
+</ParamField>
+
+<ParamField path="customer_id" type="integer" required>
+  Foreign key to the Customer who owns this equipment
+</ParamField>
+
+<ParamField path="type" type="string" required>
+  Type of equipment (e.g., 'Laptop', 'Desktop', 'Smartphone', 'TV', 'Refrigerator')
+</ParamField>
+
+<ParamField path="brand" type="string" required>
+  Brand or manufacturer name (e.g., 'Apple', 'Samsung', 'Dell', 'LG')
+</ParamField>
+
+<ParamField path="model" type="string" required>
+  Specific model number or name
+</ParamField>
+
+<ParamField path="serial_number" type="string">
+  Unique serial number or IMEI for device identification
+</ParamField>
+
+## Relationships
+
+### company()
+
+**Type:** `BelongsTo`
+
+Returns the company managing this equipment.
+
+```php
+public function company(): BelongsTo
+{
+    return $this->belongsTo(Company::class);
+}
+```
+
+### customer()
+
+**Type:** `BelongsTo`
+
+Returns the customer who owns this equipment.
+
+```php
+public function customer(): BelongsTo
+{
+    return $this->belongsTo(Customer::class);
+}
+```
+
+### orders()
+
+**Type:** `HasMany`
+
+Returns all repair orders for this equipment.
+
+```php
+public function orders(): HasMany
+{
+    return $this->hasMany(Order::class);
+}
+```
+
+## Usage Examples
+
+### Creating New Equipment
+
+```php
+$equipment = Equipment::create([
+    'company_id' => 1,
+    'customer_id' => 5,
+    'type' => 'Laptop',
+    'brand' => 'Apple',
+    'model' => 'MacBook Pro 16-inch 2023',
+    'serial_number' => 'C02XJ12NLVCG',
+]);
+```
+
+### Querying Equipment
+
+```php
+// Get all equipment for a company
+$allEquipment = Equipment::where('company_id', $companyId)
+    ->with('customer')
+    ->orderBy('created_at', 'desc')
+    ->get();
+
+// Find equipment by serial number
+$equipment = Equipment::where('company_id', $companyId)
+    ->where('serial_number', $serialNumber)
+    ->first();
+
+// Search equipment by brand or model
+$searchTerm = 'macbook';
+$results = Equipment::where('company_id', $companyId)
+    ->where(function($query) use ($searchTerm) {
+        $query->where('brand', 'like', "%{$searchTerm}%")
+              ->orWhere('model', 'like', "%{$searchTerm}%")
+              ->orWhere('type', 'like', "%{$searchTerm}%");
+    })
+    ->with('customer')
+    ->get();
+```
+
+### Accessing Equipment Relationships
+
+```php
+// Get equipment owner
+$customer = $equipment->customer;
+echo "Owner: {$customer->name}";
+
+// Get all repair history
+$repairHistory = $equipment->orders()
+    ->orderBy('created_at', 'desc')
+    ->get();
+
+// Get pending repairs
+$pendingRepairs = $equipment->orders()
+    ->whereIn('status', ['pending', 'in_progress'])
+    ->get();
+```
+
+### Equipment with Customer Information
+
+```php
+// Get equipment with owner details
+$equipment = Equipment::with('customer')
+    ->find($equipmentId);
+
+echo "Device: {$equipment->brand} {$equipment->model}\n";
+echo "Owner: {$equipment->customer->name}\n";
+echo "Contact: {$equipment->customer->phone}\n";
+```
+
+### Creating Order for Equipment
+
+```php
+$order = $equipment->orders()->create([
+    'company_id' => $equipment->company_id,
+    'customer_id' => $equipment->customer_id,
+    'technician' => 'John Doe',
+    'symptoms' => 'Screen flickering and battery not charging',
+    'status' => 'pending',
+]);
+```
+
+### Equipment Statistics
+
+```php
+// Count total repairs for equipment
+$totalRepairs = $equipment->orders()->count();
+
+// Get completed repairs
+$completedRepairs = $equipment->orders()
+    ->where('status', 'completed')
+    ->count();
+
+// Calculate total repair cost
+$totalCost = $equipment->orders()
+    ->where('status', 'completed')
+    ->sum('estimated_cost');
+```
+
+### Filtering Equipment by Type
+
+```php
+// Get all laptops
+$laptops = Equipment::where('company_id', $companyId)
+    ->where('type', 'Laptop')
+    ->with('customer')
+    ->get();
+
+// Group equipment by type
+$equipmentByType = Equipment::where('company_id', $companyId)
+    ->select('type', DB::raw('count(*) as count'))
+    ->groupBy('type')
+    ->get();
+```
+
+### Equipment for Customer
+
+```php
+// Get all equipment for a specific customer
+$customerEquipment = Equipment::where('company_id', $companyId)
+    ->where('customer_id', $customerId)
+    ->withCount('orders')
+    ->get();
+
+foreach ($customerEquipment as $device) {
+    echo "{$device->brand} {$device->model} - {$device->orders_count} repairs\n";
+}
+```
+
+### Updating Equipment Details
+
+```php
+// Update model or serial number
+$equipment->update([
+    'model' => 'MacBook Pro 16-inch 2024',
+    'serial_number' => 'C02YK34PMVCG',
+]);
+```
+
+### Equipment with Recent Orders
+
+```php
+// Get equipment with recent repair orders
+$equipment = Equipment::with([
+    'customer',
+    'orders' => function($query) {
+        $query->orderBy('created_at', 'desc')
+              ->limit(5);
+    }
+])->find($equipmentId);
+```
+
+### Equipment Validation
+
+```php
+// Check for duplicate serial numbers
+$exists = Equipment::where('company_id', $companyId)
+    ->where('serial_number', $serialNumber)
+    ->where('id', '!=', $equipmentId)
+    ->exists();
+
+if ($exists) {
+    throw new Exception('Equipment with this serial number already exists');
+}
+```
+
+### Equipment Repair Timeline
+
+```php
+$equipment = Equipment::with([
+    'orders' => function($query) {
+        $query->orderBy('created_at', 'asc');
+    },
+    'customer'
+])->find($equipmentId);
+
+// Generate timeline
+foreach ($equipment->orders as $order) {
+    echo $order->created_at->format('Y-m-d') . ": " . $order->status . "\n";
+    echo "Symptoms: " . $order->symptoms . "\n\n";
+}
+```
+
+### Equipment by Brand Statistics
+
+```php
+// Get most common brands
+$brandStats = Equipment::where('company_id', $companyId)
+    ->select('brand', DB::raw('count(*) as count'))
+    ->groupBy('brand')
+    ->orderBy('count', 'desc')
+    ->get();
+
+// Get equipment needing repair by brand
+$brandsWithPendingRepairs = Equipment::where('company_id', $companyId)
+    ->whereHas('orders', function($query) {
+        $query->whereIn('status', ['pending', 'in_progress']);
+    })
+    ->select('brand', DB::raw('count(distinct equipments.id) as count'))
+    ->groupBy('brand')
+    ->get();
+```
+
+## Common Patterns
+
+### Quick Equipment Registration
+
+```php
+// Register new equipment and create initial order
+$equipment = Equipment::create([
+    'company_id' => $companyId,
+    'customer_id' => $customerId,
+    'type' => 'Smartphone',
+    'brand' => 'Samsung',
+    'model' => 'Galaxy S23',
+    'serial_number' => 'IMEI123456789',
+]);
+
+$order = $equipment->orders()->create([
+    'company_id' => $companyId,
+    'customer_id' => $customerId,
+    'symptoms' => 'Cracked screen',
+    'status' => 'pending',
+]);
+```
+
+### Equipment Handoff Information
+
+```php
+// Generate equipment intake form data
+$equipment = Equipment::with(['customer', 'orders' => function($query) {
+    $query->latest()->limit(1);
+}])->find($equipmentId);
+
+$intakeData = [
+    'device' => "{$equipment->brand} {$equipment->model}",
+    'serial' => $equipment->serial_number,
+    'owner' => $equipment->customer->name,
+    'contact' => $equipment->customer->phone,
+    'last_service' => $equipment->orders->first()?->created_at->format('Y-m-d'),
+];
+```
+
+## Source Reference
+
+Model file: `/home/daytona/workspace/source/app/Models/Equipment.php`

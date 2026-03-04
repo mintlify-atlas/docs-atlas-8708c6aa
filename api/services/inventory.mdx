@@ -1,0 +1,372 @@
+---
+title: 'Inventory Service'
+description: 'Manage inventory items, stock movements, and low stock notifications'
+---
+
+## Overview
+
+The `InventoryService` manages inventory items and stock movements with automatic tracking, low stock notifications, and full audit trail capabilities.
+
+**Namespace:** `App\Services\InventoryService`
+
+---
+
+## Methods
+
+### createItem
+
+Creates a new inventory item with initial stock and records the initial movement.
+
+```php
+public function createItem(
+    Company $company,
+    User $actor,
+    array $payload
+): InventoryItem
+```
+
+#### Parameters
+
+<ParamField path="company" type="Company" required>
+  The company that owns the inventory item
+</ParamField>
+
+<ParamField path="actor" type="User" required>
+  The user creating the inventory item
+</ParamField>
+
+<ParamField path="payload" type="array" required>
+  Item configuration array with the following structure:
+
+  ```php
+  [
+      'name' => string,                    // Product name
+      'internal_code' => string,           // SKU or internal identifier
+      'quantity' => int,                   // Initial stock quantity
+      'low_stock_threshold' => int,        // Alert threshold (default: 5)
+      'is_sale_enabled' => bool,           // Enable for billing (default: false)
+      'sale_price' => float | null,        // Price when sale enabled
+  ]
+  ```
+</ParamField>
+
+#### Returns
+
+Returns the created `InventoryItem` model instance
+
+#### Behavior
+
+- Converts `internal_code` to uppercase
+- Creates initial inventory movement with type `'addition'`
+- Records stock change from 0 to initial quantity
+- Checks for low stock and sends notifications if needed
+- All operations wrapped in database transaction
+
+#### Example Usage
+
+```php
+use App\Services\InventoryService;
+
+$inventoryService = app(InventoryService::class);
+
+$item = $inventoryService->createItem(
+    company: $company,
+    actor: $user,
+    payload: [
+        'name' => 'Rodamiento SKF 6205',
+        'internal_code' => 'ROD-SKF-6205',
+        'quantity' => 50,
+        'low_stock_threshold' => 10,
+        'is_sale_enabled' => true,
+        'sale_price' => 320.00,
+    ]
+);
+
+echo "Created: {$item->name}";
+echo "Stock: {$item->quantity}";
+echo "Code: {$item->internal_code}"; // "ROD-SKF-6205" (uppercase)
+```
+
+---
+
+### adjustStock
+
+Adjusts inventory stock levels (add or remove) with automatic movement tracking.
+
+```php
+public function adjustStock(
+    InventoryItem $item,
+    User $actor,
+    array $payload
+): InventoryItem
+```
+
+#### Parameters
+
+<ParamField path="item" type="InventoryItem" required>
+  The inventory item to adjust
+</ParamField>
+
+<ParamField path="actor" type="User" required>
+  The user performing the adjustment
+</ParamField>
+
+<ParamField path="payload" type="array" required>
+  Adjustment configuration:
+
+  ```php
+  [
+      'movement_type' => 'addition' | 'removal',
+      'quantity' => int,              // Amount to add or remove
+      'notes' => string | null,       // Optional reason/notes
+  ]
+  ```
+</ParamField>
+
+#### Returns
+
+Returns the updated `InventoryItem` model instance (refreshed from database)
+
+#### Behavior
+
+**Addition:**
+```php
+$stockAfter = $stockBefore + $quantity;
+```
+
+**Removal:**
+```php
+$stockAfter = $stockBefore - $quantity;
+```
+
+**Validation:**
+- Cannot remove more than available stock (throws 422 error)
+- Stock cannot go negative
+
+**Tracking:**
+- Creates `InventoryMovement` record with before/after stock levels
+- Records user, timestamp, and notes
+- Triggers low stock notifications if threshold crossed
+
+#### Throws
+
+**422 Unprocessable Entity** if:
+- Attempting to remove more stock than available
+- Result would be negative stock
+
+#### Example Usage
+
+**Adding Stock:**
+
+```php
+$item = $inventoryService->adjustStock(
+    item: $item,
+    actor: $user,
+    payload: [
+        'movement_type' => 'addition',
+        'quantity' => 25,
+        'notes' => 'Recepción de pedido proveedor ABC',
+    ]
+);
+
+echo "New stock: {$item->quantity}";
+```
+
+**Removing Stock:**
+
+```php
+$item = $inventoryService->adjustStock(
+    item: $item,
+    actor: $user,
+    payload: [
+        'movement_type' => 'removal',
+        'quantity' => 5,
+        'notes' => 'Uso interno taller',
+    ]
+);
+```
+
+**Error Handling:**
+
+```php
+try {
+    $item = $inventoryService->adjustStock(
+        item: $item,
+        actor: $user,
+        payload: [
+            'movement_type' => 'removal',
+            'quantity' => 999,
+            'notes' => 'Invalid adjustment',
+        ]
+    );
+} catch (\Illuminate\Http\Exceptions\HttpResponseException $e) {
+    echo "Error: Cannot remove more than available stock";
+}
+```
+
+---
+
+### lowStockItemsForCompany
+
+Retrieves all inventory items that are at or below their low stock threshold.
+
+```php
+public function lowStockItemsForCompany(int $companyId): Collection
+```
+
+#### Parameters
+
+<ParamField path="companyId" type="int" required>
+  The company ID to check for low stock items
+</ParamField>
+
+#### Returns
+
+Returns an Eloquent `Collection` of `InventoryItem` models, ordered by quantity (lowest first)
+
+#### Query Logic
+
+```php
+InventoryItem::query()
+    ->where('company_id', $companyId)
+    ->whereColumn('quantity', '<=', 'low_stock_threshold')
+    ->orderBy('quantity')
+    ->get();
+```
+
+#### Example Usage
+
+```php
+$lowStockItems = $inventoryService->lowStockItemsForCompany($company->id);
+
+if ($lowStockItems->isNotEmpty()) {
+    echo "Low stock alerts: {$lowStockItems->count()}";
+    
+    foreach ($lowStockItems as $item) {
+        echo "{$item->name}: {$item->quantity} (threshold: {$item->low_stock_threshold})";
+    }
+}
+```
+
+**Display in Dashboard:**
+
+```php
+$alerts = $inventoryService->lowStockItemsForCompany(auth()->user()->company_id);
+
+return view('dashboard', [
+    'low_stock_alerts' => $alerts,
+]);
+```
+
+---
+
+## Low Stock Notifications
+
+The service automatically sends notifications when items reach low stock levels.
+
+### notifyLowStockIfNeeded (Private)
+
+Automatically called after stock adjustments to check and send notifications.
+
+```php
+private function notifyLowStockIfNeeded(InventoryItem $item): void
+```
+
+#### Behavior
+
+**Recipients:** Notifies users who are:
+- In the same company
+- Active (`is_active = true`)
+- Role is `'admin'`, OR
+- Role is `'worker'` with `can_access_inventory = true`
+
+**Deduplication:**
+- Checks for existing unread notifications for the same item
+- Only sends if no unread notification exists
+- Prevents notification spam
+
+**Notification Type:**
+- Uses `LowStockInventoryNotification`
+- Contains item details and stock levels
+- Stored in `notifications` table
+
+#### Trigger Condition
+
+```php
+if ($item->quantity <= $item->low_stock_threshold) {
+    // Send notifications
+}
+```
+
+---
+
+## Inventory Movement Tracking
+
+Every stock change creates an `InventoryMovement` record with:
+
+```php
+[
+    'inventory_item_id' => int,
+    'company_id' => int,
+    'user_id' => int,              // Who made the change
+    'movement_type' => string,     // 'addition' or 'removal'
+    'quantity' => int,             // Amount changed
+    'stock_before' => int,         // Stock before change
+    'stock_after' => int,          // Stock after change
+    'notes' => string | null,      // Reason/context
+    'created_at' => timestamp,     // When it happened
+]
+```
+
+### Audit Trail Example
+
+```php
+$movements = InventoryMovement::query()
+    ->where('inventory_item_id', $item->id)
+    ->with('user')
+    ->latest()
+    ->get();
+
+foreach ($movements as $movement) {
+    echo "{$movement->created_at}: {$movement->user->name}";
+    echo "{$movement->movement_type} {$movement->quantity}";
+    echo "Stock: {$movement->stock_before} → {$movement->stock_after}";
+    echo "Notes: {$movement->notes}";
+}
+```
+
+---
+
+## Transaction Safety
+
+All operations are wrapped in database transactions:
+
+```php
+DB::transaction(function () {
+    // Update inventory
+    // Create movement record
+    // Check notifications
+});
+```
+
+If any step fails, all changes are rolled back.
+
+---
+
+## Integration with Billing
+
+The `BillingService` uses `InventoryService` to deduct stock:
+
+```php
+// From BillingService.php:238
+app(InventoryService::class)->adjustStock($inventory, $actor, [
+    'movement_type' => 'removal',
+    'quantity' => $qtyToDiscount,
+    'notes' => 'Descuento por facturación emitida',
+]);
+```
+
+This ensures:
+- Automatic stock deduction on invoice creation
+- Movement tracking for billing-related changes
+- Low stock alerts triggered if needed

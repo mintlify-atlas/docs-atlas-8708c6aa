@@ -1,0 +1,388 @@
+---
+title: Subscription Plans
+description: Understanding subscription tiers, feature limits, and AI usage quotas in ElectroFix AI
+---
+
+## Overview
+
+ElectroFix AI uses a **subscription-based model** where each company subscribes to a plan that determines their feature access, user limits, and AI diagnostic capabilities. Subscriptions are company-level, not user-level.
+
+## Available Plans
+
+The system supports four subscription plans:
+
+### 1. Starter
+
+**Target Audience**: Small repair shops getting started
+
+**Features**:
+- Basic order management
+- Customer and equipment tracking
+- No AI diagnostic features
+- Limited user accounts
+
+**AI Access**: ❌ Not available
+
+### 2. Pro
+
+**Target Audience**: Growing businesses
+
+**Features**:
+- All Starter features
+- Advanced reporting
+- More user accounts
+- No AI diagnostic features
+
+**AI Access**: ❌ Not available
+
+### 3. Enterprise
+
+**Target Audience**: Large repair operations
+
+**Features**:
+- All Pro features
+- AI-powered diagnostics
+- Priority support
+- Custom integrations
+
+**AI Quotas**:
+- **200 queries per month**
+- **120,000 tokens per month**
+
+### 4. Developer Test
+
+**Target Audience**: Internal testing and development
+
+**Features**:
+- All Enterprise features
+- Extended AI limits for testing
+- Development tools access
+
+**AI Quotas**:
+- **500 queries per month**
+- **500,000 tokens per month**
+
+## Database Schema
+
+### Subscriptions Table
+
+```php
+// database/migrations/create_subscriptions_table.php
+Schema::create('subscriptions', function (Blueprint $table): void {
+    $table->id();
+    $table->foreignId('company_id')->unique()->constrained()->cascadeOnDelete();
+    $table->enum('plan', ['starter', 'pro', 'enterprise', 'developer_test'])
+          ->default('starter');
+    $table->enum('status', ['active', 'trial', 'past_due', 'canceled', 'suspended'])
+          ->default('trial');
+    $table->date('starts_at');
+    $table->date('ends_at');
+    $table->enum('billing_cycle', ['monthly', 'yearly'])->default('monthly');
+    $table->unsignedInteger('user_limit')->nullable();
+    $table->timestamps();
+});
+```
+
+### Subscription Model
+
+```php
+// app/Models/Subscription.php
+class Subscription extends Model
+{
+    protected $fillable = [
+        'company_id',
+        'plan',           // Plan name
+        'status',         // Subscription status
+        'starts_at',      // Start date
+        'ends_at',        // Expiration date
+        'billing_cycle',  // monthly or yearly
+        'user_limit',     // Maximum users allowed
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'starts_at' => 'date',
+            'ends_at' => 'date',
+        ];
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+}
+```
+
+## Subscription Status
+
+A subscription can have one of five statuses:
+
+| Status | Description |
+|--------|-------------|
+| `trial` | Company is in trial period |
+| `active` | Subscription is active and paid |
+| `past_due` | Payment failed, grace period |
+| `canceled` | Subscription canceled by company |
+| `suspended` | Administratively suspended |
+
+## AI Plan Policy Service
+
+The `AiPlanPolicyService` defines and enforces AI usage limits:
+
+```php
+// app/Services/AiPlanPolicyService.php
+class AiPlanPolicyService
+{
+    public const PLAN_ENTERPRISE = 'enterprise';
+    public const PLAN_DEVELOPER_TEST = 'developer_test';
+
+    // Monthly query limits by plan
+    private const QUERY_LIMITS = [
+        self::PLAN_ENTERPRISE => 200,
+        self::PLAN_DEVELOPER_TEST => 500,
+    ];
+
+    // Monthly token limits by plan
+    private const TOKEN_LIMITS = [
+        self::PLAN_ENTERPRISE => 120000,      // 120k tokens
+        self::PLAN_DEVELOPER_TEST => 500000,  // 500k tokens
+    ];
+
+    /**
+     * Check if a plan includes AI features
+     */
+    public function supportsAi(string $plan): bool
+    {
+        return array_key_exists($plan, self::QUERY_LIMITS);
+    }
+
+    /**
+     * Get monthly query limit for a plan
+     */
+    public function queryLimit(string $plan): int
+    {
+        return self::QUERY_LIMITS[$plan] ?? 0;
+    }
+
+    /**
+     * Get monthly token limit for a plan
+     */
+    public function tokenLimit(string $plan): int
+    {
+        return self::TOKEN_LIMITS[$plan] ?? 0;
+    }
+}
+```
+
+## Accessing Subscription Data
+
+### From Company Model
+
+```php
+$company = Company::with('subscription')->find($companyId);
+$plan = $company->subscription?->plan ?? 'starter';
+$status = $company->subscription?->status;
+```
+
+### From User
+
+```php
+$user = auth()->user();
+$plan = $user->company?->subscription?->plan ?? 'starter';
+$aiEnabled = $aiPlanPolicyService->supportsAi($plan);
+```
+
+### In Controllers
+
+```php
+// app/Http/Controllers/Worker/OrderController.php:47-51
+$plan = (string) ($user?->company?->subscription?->plan ?? 'starter');
+$aiEnabled = $aiPlanPolicyService->supportsAi($plan);
+$monthlyUsage = $user?->company
+    ? $aiUsageService->monthlyUsage($user->company)
+    : ['queries_used' => 0, 'tokens_used' => 0];
+```
+
+## Plan Comparison Table
+
+| Feature | Starter | Pro | Enterprise | Developer Test |
+|---------|---------|-----|------------|----------------|
+| Order Management | ✅ | ✅ | ✅ | ✅ |
+| Customer Tracking | ✅ | ✅ | ✅ | ✅ |
+| Equipment Database | ✅ | ✅ | ✅ | ✅ |
+| Inventory Module | ✅ | ✅ | ✅ | ✅ |
+| Billing Module | ✅ | ✅ | ✅ | ✅ |
+| AI Diagnostics | ❌ | ❌ | ✅ | ✅ |
+| AI Queries/Month | 0 | 0 | 200 | 500 |
+| AI Tokens/Month | 0 | 0 | 120,000 | 500,000 |
+| User Limit | Limited | More | Custom | Unlimited |
+| Support | Email | Priority | Dedicated | Internal |
+
+## Billing Cycle
+
+Subscriptions can be billed monthly or yearly:
+
+```php
+$subscription->billing_cycle; // 'monthly' or 'yearly'
+```
+
+## User Limits
+
+Some plans enforce a maximum number of user accounts:
+
+```php
+$subscription->user_limit; // null for unlimited, integer for limited plans
+
+// Example check before creating users
+$currentUsers = $company->users()->count();
+$limit = $company->subscription?->user_limit;
+
+if ($limit && $currentUsers >= $limit) {
+    abort(403, 'Has alcanzado el límite de usuarios para tu plan.');
+}
+```
+
+## Upgrading/Downgrading Plans
+
+Admins can manage their subscription through the admin panel:
+
+```php
+// routes/web.php:80-81
+Route::get('/admin/subscription', [SubscriptionController::class, 'edit'])
+    ->middleware('role:admin');
+
+Route::put('/admin/subscription', [SubscriptionController::class, 'update'])
+    ->middleware('role:admin');
+```
+
+## Plan Detection
+
+The system defaults to 'starter' if no subscription exists:
+
+```php
+// app/Services/OrderCreationService.php:14
+private const DEFAULT_PLAN = 'starter';
+
+// Later in the code
+$plan = (string) ($company->subscription?->plan ?? self::DEFAULT_PLAN);
+```
+
+## AI Feature Gating
+
+UI elements and features are conditionally shown based on plan:
+
+```php
+// In views
+@if($aiEnabled)
+    <button type="button" id="diagnoseBtn">Request AI Diagnosis</button>
+@else
+    <p>Upgrade to Enterprise for AI diagnostics</p>
+@endif
+```
+
+Controller example:
+```php
+// app/Http/Controllers/Worker/OrderController.php:76-80
+return view('worker.orders.index', [
+    'aiPlan' => $plan,
+    'aiEnabled' => $aiEnabled,
+    'aiQueryLimit' => $aiPlanPolicyService->queryLimit($plan),
+    'aiTokenLimit' => $aiPlanPolicyService->tokenLimit($plan),
+    'aiQueriesUsed' => $monthlyUsage['queries_used'],
+    'aiTokensUsed' => $monthlyUsage['tokens_used'],
+]);
+```
+
+## Subscription Lifecycle
+
+### 1. Trial Period
+
+New companies start with a trial subscription:
+
+```php
+$subscription = Subscription::create([
+    'company_id' => $company->id,
+    'plan' => 'pro',
+    'status' => 'trial',
+    'starts_at' => now(),
+    'ends_at' => now()->addDays(30),
+    'billing_cycle' => 'monthly',
+]);
+```
+
+### 2. Active Subscription
+
+After payment, status changes to 'active':
+
+```php
+$subscription->update(['status' => 'active']);
+```
+
+### 3. Renewal
+
+Billing cycle determines renewal date:
+
+```php
+if ($subscription->billing_cycle === 'monthly') {
+    $subscription->ends_at = $subscription->ends_at->addMonth();
+} else {
+    $subscription->ends_at = $subscription->ends_at->addYear();
+}
+$subscription->save();
+```
+
+### 4. Expiration Handling
+
+Checking if subscription is expired:
+
+```php
+if ($subscription->ends_at < now() && $subscription->status === 'active') {
+    $subscription->update(['status' => 'past_due']);
+}
+```
+
+## Best Practices
+
+### 1. Always Check AI Support
+
+```php
+if (! $aiPlanPolicyService->supportsAi($plan)) {
+    return response()->json([
+        'error' => 'Tu plan actual no incluye Asistente IA.'
+    ], 403);
+}
+```
+
+### 2. Default to Starter Plan
+
+```php
+$plan = $company->subscription?->plan ?? 'starter';
+```
+
+### 3. Cache Subscription Data
+
+For frequently accessed data, eager load subscriptions:
+
+```php
+$companies = Company::with('subscription')->get();
+```
+
+### 4. Validate Plan Changes
+
+When changing plans, ensure user limit compatibility:
+
+```php
+$newUserLimit = $newPlan->user_limit;
+$currentUsers = $company->users()->count();
+
+if ($newUserLimit && $currentUsers > $newUserLimit) {
+    throw new Exception('Reduce users before downgrading.');
+}
+```
+
+## Related Topics
+
+- [AI Diagnostics](/concepts/ai-diagnostics) - AI usage tracking and quotas
+- [Multi-Tenancy](/concepts/multi-tenancy) - Company-level subscriptions
+- [Roles & Permissions](/concepts/roles-permissions) - User access control

@@ -1,0 +1,492 @@
+---
+title: Managing Inventory
+description: Complete guide to tracking parts, managing stock levels, and monitoring inventory movements
+---
+
+## Overview
+
+The Inventory module helps you manage spare parts, components, and products for both repairs and direct sales. Track stock levels, receive low-stock alerts, record movements, and enable items for sale in your billing system.
+
+<Warning>
+  Access to the Inventory module requires the **can_access_inventory** permission. Admins have full access; workers must be granted permission by admins.
+</Warning>
+
+### What You Can Do
+
+- Register inventory items with unique internal codes
+- Track current stock quantities
+- Set low-stock thresholds for automatic alerts
+- Adjust stock with addition/removal movements
+- Enable items for direct sale with pricing
+- View movement history for audit trails
+- Receive notifications when stock runs low
+
+## Accessing Inventory
+
+Navigate to **Inventario** (Inventory) from the main menu. The page displays:
+
+- Low-stock alerts (if any items are below threshold)
+- Unread low-stock notifications
+- Search functionality
+- Full inventory table with current stock levels
+- Recent movement history
+
+## Creating Inventory Items
+
+<Steps>
+  <Step title="Open the Inventory Form">
+    Click **Agregar Producto** in the top-right corner. A modal form will appear.
+  </Step>
+
+  <Step title="Enter Product Name">
+    Fill in the **Nombre** (Name) field:
+    - Required field
+    - Maximum 180 characters
+    - Use descriptive names for easy identification
+    
+    **Example**: "Capacitor 20uF 450V", "Termostato universal", "Correa lavadora tipo A"
+  </Step>
+
+  <Step title="Set Internal Code">
+    Assign a unique **Identificador interno** (Internal Code):
+    - Required field
+    - Maximum 120 characters
+    - Must be unique within your company
+    - Use consistent format for easy organization
+    
+    **Examples**: 
+    - "CAP-20UF-450V"
+    - "TERM-UNIV-001"
+    - "REF-001"
+    
+    <Warning>
+      Internal codes cannot be duplicated. Choose a systematic naming scheme for your inventory.
+    </Warning>
+  </Step>
+
+  <Step title="Set Initial Quantity">
+    Enter the starting **Cantidad inicial** (Initial Quantity):
+    - Required field
+    - Integer value (whole numbers only)
+    - Minimum: 0
+    - Maximum: 1,000,000
+    - Default: 0
+    
+    This creates an automatic "addition" movement in the system.
+  </Step>
+
+  <Step title="Set Low-Stock Threshold (Optional)">
+    Define the **Umbral de escasez** (Low-Stock Threshold):
+    - Optional field (recommended)
+    - Integer value
+    - Minimum: 0
+    - Maximum: 1,000,000
+    - Default: 5
+    
+    When stock falls to or below this level, the system:
+    - Highlights the item in red
+    - Shows a "Bajo" (Low) badge
+    - Sends notifications to admins and authorized workers
+  </Step>
+
+  <Step title="Enable for Sale (Optional)">
+    Check **Habilitar venta** if this item can be sold directly to customers:
+    - Enables the item in billing/POS module
+    - Requires sale price to be set
+    - Stock automatically decrements when sold
+    
+    <Note>
+      Items not enabled for sale can still be used for internal repairs and stock tracking.
+    </Note>
+  </Step>
+
+  <Step title="Set Sale Price (If Enabled)">
+    If sale is enabled, enter **Precio de venta** (Sale Price):
+    - Required when "Habilitar venta" is checked
+    - Decimal value supported (e.g., 125.50)
+    - Minimum: 0
+    - Maximum: 99,999,999.99
+    - Uses company's currency
+    
+    The price input is disabled until you check "Habilitar venta".
+  </Step>
+
+  <Step title="Save the Item">
+    Click **Guardar producto** to create the inventory item. The system will:
+    - Validate uniqueness of internal code
+    - Create the item record
+    - Generate initial stock movement
+    - Display success confirmation
+  </Step>
+</Steps>
+
+## Inventory Item Fields
+
+| Field | Required | Type | Max Value | Validation |
+|-------|----------|------|-----------|------------|
+| **name** | Yes | Text | 180 chars | Cannot be empty |
+| **internal_code** | Yes | Text | 120 chars | Unique per company |
+| **quantity** | Yes | Integer | 1,000,000 | Min 0 |
+| **low_stock_threshold** | No | Integer | 1,000,000 | Min 0, default 5 |
+| **is_sale_enabled** | No | Boolean | - | Default false |
+| **sale_price** | Conditional | Decimal | 99,999,999.99 | Required if sale enabled |
+
+## Viewing Inventory
+
+The inventory table displays:
+
+### Producto (Product)
+- **Product name**: Main identifier
+- **Low-stock threshold**: Minimum stock level before alert
+
+### Identificador (Internal Code)
+Unique code badge for quick reference and barcode scanning.
+
+### Stock
+- **Current quantity**: Displayed prominently
+- **Low stock indicator**: Red text and "Bajo" badge when at or below threshold
+
+### Venta (Sale)
+- **"Venta habilitada"**: Green badge if item can be sold
+- **Price**: Sale price if enabled
+- **"Solo refacción"**: Blue badge if not for sale (repair parts only)
+
+### Acciones (Actions)
+- **Ajustar stock**: Opens modal to add or remove units
+- **Eliminar**: Permanently deletes the item (with confirmation)
+
+## Adjusting Stock Levels
+
+<Steps>
+  <Step title="Open Adjustment Modal">
+    Click **Ajustar stock** on the item you want to modify. The adjustment form appears.
+  </Step>
+
+  <Step title="Select Movement Type">
+    Choose the **Movimiento** (Movement Type):
+    - **Agregar unidades** (Addition): Receiving new stock
+    - **Retirar unidades** (Removal): Using or removing stock
+  </Step>
+
+  <Step title="Enter Quantity">
+    Specify the **Cantidad** (Quantity) to add or remove:
+    - Required field
+    - Integer only (whole numbers)
+    - Minimum: 1
+    - Maximum: 1,000,000
+    
+    The current stock is displayed for reference.
+  </Step>
+
+  <Step title="Add Notes (Optional)">
+    Enter a **Nota** (Note) explaining the adjustment:
+    - Optional field
+    - Maximum 255 characters
+    - Helpful for audit trails
+    
+    **Examples**:
+    - "Compra proveedor ABC"
+    - "Usado en orden #1234"
+    - "Inventario físico corrección"
+    - "Defectuoso, descartado"
+  </Step>
+
+  <Step title="Save Adjustment">
+    Click **Guardar ajuste**. The system will:
+    - Validate sufficient stock for removals
+    - Update item quantity
+    - Create movement record
+    - Log the user who made the change
+    - Trigger low-stock check
+  </Step>
+</Steps>
+
+<Warning>
+  The system prevents removing more stock than currently available. If you need to adjust for loss or damage, ensure the removal quantity doesn't exceed current stock.
+</Warning>
+
+## Movement History
+
+The bottom section shows **Movimientos recientes de stock** (Recent Stock Movements):
+
+### Movement Table Columns
+
+- **Fecha**: Timestamp when movement occurred (YYYY-MM-DD HH:MM)
+- **Producto**: Item name (or "Producto eliminado" if item was deleted)
+- **Tipo**: 
+  - Green "Entrada" badge for additions
+  - Orange "Salida" badge for removals
+- **Cantidad**: Number of units moved
+- **Stock**: Shows before and after quantities (e.g., "10 → 15")
+- **Usuario**: Name of user who performed the movement
+
+### Movement Tracking
+
+The system automatically creates movements for:
+- Initial stock when item is created
+- Manual adjustments (additions/removals)
+- Sales through billing module (automatic removals)
+
+The last 12 movements display by default, sorted newest first.
+
+## Low-Stock Alerts
+
+### Alert Card
+
+When items fall to or below their threshold, a warning card appears at the top:
+
+- **Count badge**: Number of items currently low
+- **Item list**: Shows each low-stock item with code and current quantity
+- **Auto-notification**: Admins and inventory-enabled workers receive notifications
+
+### Notification System
+
+Low-stock notifications display:
+- **Unread notifications**: List appears in a card on the inventory page
+- **Message format**: "[Item Name] tiene stock bajo: [Quantity] unidades restantes."
+- **Automatic trigger**: Sent when quantity drops to or below threshold
+- **Recipients**: All admins and workers with `can_access_inventory` permission
+
+<Note>
+  Notifications are sent in real-time when stock changes trigger the low-stock condition. Mark them as read to clear from the page.
+</Note>
+
+## Searching Inventory
+
+Use the search to find items quickly:
+
+### Searchable Fields
+- **Product name**: Partial match (e.g., "Capacitor", "termo")
+- **Internal code**: Partial match (e.g., "CAP-", "001")
+
+### Search Process
+
+<Steps>
+  <Step title="Enter Search Term">
+    Type part of the product name or code in the search box.
+  </Step>
+  
+  <Step title="Execute Search">
+    Click **Buscar** or press Enter.
+  </Step>
+  
+  <Step title="View Results">
+    The table updates to show only matching items. The count badge reflects filtered results.
+  </Step>
+  
+  <Step title="Clear Filter">
+    Clear the search field and search again to view all items.
+  </Step>
+</Steps>
+
+## Deleting Inventory Items
+
+<Warning>
+  Deleting an inventory item is permanent and cannot be undone. Movement history remains but shows "Producto eliminado" in the product column.
+</Warning>
+
+To delete an item:
+
+1. Click the red **Eliminar** button on the item
+2. Confirm the deletion in the browser prompt
+3. The item is permanently removed from inventory
+4. Past movements remain in history for audit purposes
+
+**Consider carefully before deleting:**
+- Items with movement history
+- Items referenced in old invoices or orders
+- Items with remaining stock value
+
+## Integration with Billing
+
+### Sale-Enabled Items
+
+When creating billing documents:
+1. Items with `is_sale_enabled = true` appear in product dropdowns
+2. Stock quantity displays for each product
+3. Out-of-stock items (quantity = 0) are disabled
+4. Selecting a product auto-fills:
+   - Description (name + code)
+   - Unit price (sale_price)
+   - Max quantity (current stock)
+
+### Automatic Stock Reduction
+
+When an invoice or quote is created:
+- Product quantities automatically decrement
+- A "removal" movement is created
+- Movement is linked to the billing document
+- If stock drops below threshold, low-stock alert triggers
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Establish Internal Code Standards">
+    Create a consistent coding system:
+    - **Category prefix**: CAP (capacitors), RES (resistors), BELT (belts)
+    - **Specifications**: Include key specs in code
+    - **Sequential numbers**: CAP-001, CAP-002, etc.
+    - **Avoid special characters**: Stick to letters, numbers, hyphens
+    
+    **Example System**:
+    - `CAP-20UF-450V` = Capacitor, 20 microfarads, 450 volts
+    - `BELT-WM-A` = Belt, Washing Machine, Type A
+    - `TERM-REF-UNIV` = Thermostat, Refrigerator, Universal
+  </Accordion>
+  
+  <Accordion title="Set Realistic Low-Stock Thresholds">
+    Consider these factors:
+    - **Lead time**: How long to reorder?
+    - **Usage frequency**: How often used in repairs?
+    - **Critical items**: Set higher thresholds for essential parts
+    - **Seasonal demand**: Adjust for peak seasons
+    
+    **Examples**:
+    - Common capacitors: 10 units
+    - Specialized parts: 3 units
+    - High-turnover items: 20+ units
+  </Accordion>
+  
+  <Accordion title="Document Stock Adjustments">
+    Always add notes when adjusting stock:
+    - **Purchases**: Include supplier and date
+    - **Repairs**: Reference order number
+    - **Corrections**: Explain the discrepancy
+    - **Damage/Loss**: Document reason
+    
+    Good notes create audit trails and help identify issues.
+  </Accordion>
+  
+  <Accordion title="Regular Physical Counts">
+    Periodically verify physical stock:
+    - Schedule monthly or quarterly counts
+    - Compare physical count to system quantity
+    - Use adjustments to correct discrepancies
+    - Investigate significant differences
+  </Accordion>
+  
+  <Accordion title="Price Strategy for Sale Items">
+    When setting sale prices:
+    - Include cost + desired markup
+    - Account for VAT (will be applied per company setting)
+    - Stay competitive with local market
+    - Update prices when costs change
+    - Consider volume discounts (manual adjustment in billing)
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### Cannot Access Inventory Module
+
+**Cause**: User lacks `can_access_inventory` permission.
+
+**Solution**:
+- **Admins**: Have automatic access
+- **Workers**: Request admin to grant inventory permission
+- **Admin action**: Go to Worker Management, edit user, check "Permitir Inventario"
+
+### "Internal Code Already Exists" Error
+
+**Cause**: Another item in your company uses this code.
+
+**Solution**:
+- Search inventory to find the existing item
+- Choose a different, unique code
+- Consider adding a suffix: REF-001-A, REF-001-B
+
+### Item Not Appearing in Billing Product List
+
+**Possible Causes**:
+- `is_sale_enabled` is false (disabled for sale)
+- Item belongs to different company
+- Page needs refresh after creating item
+
+**Solution**:
+1. Edit item to enable sale and set price
+2. Refresh the billing page
+3. Check that item shows "Venta habilitada" badge
+
+### Cannot Remove Stock - Insufficient Quantity
+
+**Cause**: Trying to remove more units than currently available.
+
+**Solution**:
+- Check current stock quantity
+- Reduce removal amount to available stock or less
+- If item is truly gone, remove available quantity and note the loss
+
+### Low-Stock Notifications Not Received
+
+**Possible Causes**:
+- User doesn't have inventory permission
+- Notifications already marked as read
+- Threshold not set or set to 0
+
+**Solution**:
+- Verify `can_access_inventory` permission
+- Check low-stock alert card on inventory page
+- Review and adjust item thresholds
+
+## Technical Reference
+
+### Controller Actions
+
+- **Index**: `GET /worker/inventory` - List items, movements, and alerts
+- **Store**: `POST /worker/inventory` - Create new inventory item
+- **Adjust Stock**: `PATCH /worker/inventory/{item}/stock` - Add or remove stock
+- **Destroy**: `DELETE /worker/inventory/{item}` - Permanently delete item
+
+### Data Model
+
+```php
+// InventoryItem
+[
+  'company_id',           // Auto-set to user's company
+  'name',                 // Product name (max 180)
+  'internal_code',        // Unique code (max 120, unique per company)
+  'quantity',             // Current stock (integer, 0-1000000)
+  'low_stock_threshold',  // Alert threshold (integer, default 5)
+  'is_sale_enabled',      // Enable in billing (boolean)
+  'sale_price',           // Price if sale enabled (decimal, max 99999999.99)
+]
+
+// InventoryMovement
+[
+  'company_id',           // Company reference
+  'inventory_item_id',    // Item being moved
+  'user_id',              // User who performed movement
+  'movement_type',        // 'addition' or 'removal'
+  'quantity',             // Units moved
+  'stock_before',         // Quantity before movement
+  'stock_after',          // Quantity after movement
+  'notes',                // Optional explanation (max 255)
+  'created_at',           // Timestamp
+]
+```
+
+### Low-Stock Detection
+
+The `InventoryItem` model includes:
+
+```php
+public function isLowStock(): bool
+{
+    return $this->quantity <= $this->low_stock_threshold;
+}
+```
+
+When triggered, the system dispatches `LowStockInventoryNotification` to authorized users.
+
+### Service Layer
+
+Inventory operations use `InventoryService` for:
+- `createItem()`: Creates item with initial movement
+- `adjustStock()`: Handles additions/removals with movement logging
+- `lowStockItemsForCompany()`: Retrieves items below threshold
+
+## Related Features
+
+- [Billing & Invoices](/guides/worker/billing) - Sell inventory items to customers
+- [Worker Management](/guides/admin/worker-management) - Grant inventory permissions
+- [Company Settings](/guides/admin/company-settings) - Configure currency and VAT for pricing

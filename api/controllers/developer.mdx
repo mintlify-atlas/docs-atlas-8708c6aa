@@ -1,0 +1,354 @@
+---
+title: 'Developer Controllers'
+description: 'API reference for Developer role controllers - Company insights, Subscriptions, and System monitoring'
+---
+
+## Overview
+
+Developer controllers provide system-wide insights and monitoring capabilities. All routes require authentication and the `role:developer` middleware. Developer role has elevated permissions to view data across all companies.
+
+---
+
+## Company Insights
+
+View and monitor all companies in the system.
+
+### List All Companies
+
+<ParamField path="GET /developer/companies" type="route">
+  Display list of all companies with subscription and user information.
+</ParamField>
+
+**Middleware:** `auth`, `role:developer`
+
+**Route Name:** `developer.companies.index`
+
+**Response:**
+- Returns view with all companies
+- Includes subscription details for each company
+- Includes user count and user list
+- Ordered alphabetically by company name
+
+**Controller:** `App\Http\Controllers\Developer\CompanyInsightsController@index`
+
+**Source:** routes/web.php:86
+
+**Related Models:**
+- Company (with subscription and users relationships)
+- Subscription
+- User
+
+---
+
+### View Company Details
+
+<ParamField path="GET /developer/companies/{company}" type="route">
+  Display detailed information for a specific company.
+</ParamField>
+
+**Middleware:** `auth`, `role:developer`
+
+**Route Name:** `developer.companies.show`
+
+**URL Parameters:**
+
+<ParamField path="company" type="integer" required>
+  Company ID
+</ParamField>
+
+**Response:**
+- Returns view with complete company details
+- Includes subscription information
+- Includes all users (workers and admins)
+- Company profile and settings
+- Usage statistics
+
+**Controller:** `App\Http\Controllers\Developer\CompanyInsightsController@show`
+
+**Source:** routes/web.php:87
+
+**Accessible Information:**
+- Company profile (name, owner, contact details)
+- Subscription status and plan
+- All users in the company
+- Module access settings
+- Company statistics
+
+---
+
+### View All Subscriptions
+
+<ParamField path="GET /developer/subscriptions" type="route">
+  Display subscription overview for all companies.
+</ParamField>
+
+**Middleware:** `auth`, `role:developer`
+
+**Route Name:** `developer.subscriptions`
+
+**Response:**
+- Returns view with all companies and their subscriptions
+- Ordered alphabetically by company name
+- Useful for monitoring subscription statuses across the system
+
+**Controller:** `App\Http\Controllers\Developer\CompanyInsightsController@subscriptions`
+
+**Source:** routes/web.php:88
+
+**Use Cases:**
+- Monitor active vs. trial subscriptions
+- Identify expired or expiring subscriptions
+- Track subscription upgrades/downgrades
+- Analyze subscription distribution (starter, pro, enterprise)
+
+---
+
+### View Test Company
+
+<ParamField path="GET /developer/test-company" type="route">
+  Quick access to the "ElectroFix Developer Lab" test company.
+</ParamField>
+
+**Middleware:** `auth`, `role:developer`
+
+**Route Name:** `developer.test-company`
+
+**Response:**
+- Returns view with test company details
+- Finds company named "ElectroFix Developer Lab"
+- Includes subscription and user information
+- Fails with 404 if test company doesn't exist
+
+**Controller:** `App\Http\Controllers\Developer\CompanyInsightsController@testCompany`
+
+**Source:** routes/web.php:89
+
+**Purpose:**
+- Quick access to development/testing company
+- Verify test data and configurations
+- Test features in isolated environment
+
+---
+
+## Developer Privileges
+
+The developer role has special access across the system:
+
+### Cross-Company Access
+
+Developers can access data from all companies:
+
+- View orders from any company
+- Access customers across companies
+- See all equipment records
+- Monitor inventory items system-wide
+- View billing documents from all companies
+
+**Authorization Pattern:**
+```php
+// In controllers
+if ($request->user()->role !== 'developer') {
+    $query->where('company_id', $request->user()->company_id);
+}
+// Developer sees all records, others see only their company
+```
+
+### Bypassed Restrictions
+
+Developers bypass certain company-level restrictions:
+
+- **Orders:** Can modify orders from any company
+- **Equipment:** Can diagnose equipment from any company
+- **Billing:** Can access documents from any company
+- **Workers:** Full visibility into all user accounts
+
+---
+
+## Developer Dashboard
+
+Access the developer-specific dashboard:
+
+<ParamField path="GET /dashboard/developer" type="route">
+  Display developer dashboard with system-wide metrics.
+</ParamField>
+
+**Middleware:** `auth`, `role:developer`
+
+**Route Name:** `dashboard.developer`
+
+**Controller:** `App\Http\Controllers\DashboardController@developer`
+
+**Source:** routes/web.php:85
+
+---
+
+## Usage Examples
+
+### Viewing Company List
+
+```html
+<a href="{{ route('developer.companies.index') }}">
+    View All Companies
+</a>
+
+<!-- In the view -->
+@foreach($companies as $company)
+    <div class="company-card">
+        <h3>{{ $company->name }}</h3>
+        <p>Owner: {{ $company->owner_name }}</p>
+        <p>Users: {{ $company->users->count() }}</p>
+        <p>Plan: {{ $company->subscription?->plan ?? 'None' }}</p>
+        <p>Status: {{ $company->subscription?->status ?? 'No subscription' }}</p>
+        <a href="{{ route('developer.companies.show', $company) }}">
+            View Details
+        </a>
+    </div>
+@endforeach
+```
+
+### Viewing Specific Company Details
+
+```html
+<a href="{{ route('developer.companies.show', 5) }}">
+    View Company #5
+</a>
+
+<!-- Company detail page -->
+<div class="company-details">
+    <h1>{{ $company->name }}</h1>
+    
+    <section class="subscription">
+        <h2>Subscription</h2>
+        <p>Plan: {{ $company->subscription->plan }}</p>
+        <p>Status: {{ $company->subscription->status }}</p>
+        <p>Starts: {{ $company->subscription->starts_at }}</p>
+        <p>Ends: {{ $company->subscription->ends_at }}</p>
+        <p>User Limit: {{ $company->subscription->user_limit }}</p>
+    </section>
+    
+    <section class="users">
+        <h2>Users ({{ $company->users->count() }})</h2>
+        @foreach($company->users as $user)
+            <div class="user">
+                <p>{{ $user->name }} ({{ $user->role }})</p>
+                <p>{{ $user->email }}</p>
+                <p>Active: {{ $user->is_active ? 'Yes' : 'No' }}</p>
+            </div>
+        @endforeach
+    </section>
+</div>
+```
+
+### Monitoring Subscriptions
+
+```html
+<a href="{{ route('developer.subscriptions') }}">
+    View All Subscriptions
+</a>
+
+<!-- Subscriptions overview -->
+<div class="subscriptions-list">
+    @foreach($companies as $company)
+        @php
+            $sub = $company->subscription;
+            $isExpiringSoon = $sub && $sub->ends_at <= now()->addDays(7);
+            $isExpired = $sub && $sub->ends_at < now();
+        @endphp
+        
+        <div class="subscription-item {{ $isExpired ? 'expired' : ($isExpiringSoon ? 'expiring' : '') }}">
+            <h3>{{ $company->name }}</h3>
+            @if($sub)
+                <p>Plan: {{ $sub->plan }}</p>
+                <p>Status: {{ $sub->status }}</p>
+                <p>Ends: {{ $sub->ends_at }}</p>
+                @if($isExpired)
+                    <span class="badge danger">EXPIRED</span>
+                @elseif($isExpiringSoon)
+                    <span class="badge warning">EXPIRING SOON</span>
+                @endif
+            @else
+                <p class="no-subscription">No active subscription</p>
+            @endif
+        </div>
+    @endforeach
+</div>
+```
+
+### Accessing Test Company
+
+```html
+<a href="{{ route('developer.test-company') }}" class="quick-link">
+    Jump to Test Company
+</a>
+
+<!-- Useful for development navigation -->
+<nav class="dev-tools">
+    <a href="{{ route('dashboard.developer') }}">Dashboard</a>
+    <a href="{{ route('developer.companies.index') }}">All Companies</a>
+    <a href="{{ route('developer.subscriptions') }}">Subscriptions</a>
+    <a href="{{ route('developer.test-company') }}">Test Company</a>
+</nav>
+```
+
+---
+
+## System Monitoring
+
+Developers can monitor system-wide metrics:
+
+### Subscription Analytics
+
+- **Active subscriptions:** Companies with status "active"
+- **Trial subscriptions:** Companies in trial period
+- **Expired subscriptions:** Past end date
+- **Plan distribution:** Count of starter/pro/enterprise plans
+
+### User Metrics
+
+- **Total users:** Across all companies
+- **Active users:** Currently enabled accounts
+- **Inactive users:** Deactivated accounts
+- **Role distribution:** Admins vs. workers
+
+### Company Health
+
+- **Total companies:** System-wide count
+- **Companies without subscriptions:** Requiring attention
+- **Module adoption:** Billing and inventory usage rates
+- **User capacity:** Companies near user limits
+
+---
+
+## Developer Testing
+
+The developer role is designed for:
+
+1. **Cross-company testing:** Verify features work across different companies
+2. **Data validation:** Check data integrity and relationships
+3. **Subscription testing:** Test different plan configurations
+4. **User management:** Monitor account creation and permissions
+5. **System monitoring:** Track overall system health and usage
+
+**Test Company Usage:**
+```php
+// The "ElectroFix Developer Lab" company is designated for testing
+// Access quickly via: /developer/test-company
+// Use for:
+// - Testing new features
+// - Verifying AI diagnostics
+// - Testing subscription changes
+// - Experimenting with module access
+```
+
+---
+
+## Security Note
+
+The developer role has elevated privileges and should be restricted to trusted system administrators only. Developer accounts can:
+
+- View sensitive company data
+- Access financial information
+- See customer details across all companies
+- Bypass company-level authorization checks
+
+Ensure developer accounts are properly secured and audited.

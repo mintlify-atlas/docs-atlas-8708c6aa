@@ -1,0 +1,324 @@
+---
+title: 'Order Model'
+description: 'API reference for the Order model in ElectroFix'
+---
+
+## Overview
+
+The Order model represents repair orders in ElectroFix. It tracks equipment repairs, symptoms, technician assignments, AI-powered diagnostics, cost estimates, and repair status. This is a core model that integrates AI capabilities for automated diagnostics.
+
+## Properties
+
+### Fillable Attributes
+
+<ParamField path="company_id" type="integer" required>
+  Foreign key to the Company this order belongs to
+</ParamField>
+
+<ParamField path="customer_id" type="integer" required>
+  Foreign key to the Customer who owns the equipment
+</ParamField>
+
+<ParamField path="equipment_id" type="integer" required>
+  Foreign key to the Equipment being repaired
+</ParamField>
+
+<ParamField path="technician" type="string">
+  Name of the assigned technician
+</ParamField>
+
+<ParamField path="symptoms" type="text" required>
+  Description of the equipment problems and symptoms
+</ParamField>
+
+<ParamField path="status" type="string" required>
+  Current order status (e.g., 'pending', 'in_progress', 'completed', 'cancelled')
+</ParamField>
+
+<ParamField path="estimated_cost" type="decimal">
+  Manual cost estimate for the repair
+</ParamField>
+
+<ParamField path="ai_potential_causes" type="array">
+  AI-generated list of potential causes for the equipment failure
+</ParamField>
+
+<ParamField path="ai_estimated_time" type="string">
+  AI-estimated time required to complete the repair
+</ParamField>
+
+<ParamField path="ai_suggested_parts" type="array">
+  AI-generated list of suggested replacement parts
+</ParamField>
+
+<ParamField path="ai_technical_advice" type="text">
+  AI-generated technical advice and repair instructions
+</ParamField>
+
+<ParamField path="ai_diagnosed_at" type="datetime">
+  Timestamp when AI diagnosis was performed
+</ParamField>
+
+<ParamField path="ai_tokens_used" type="integer">
+  Number of AI tokens consumed for this diagnosis
+</ParamField>
+
+<ParamField path="ai_provider" type="string">
+  AI provider used (e.g., 'openai', 'anthropic')
+</ParamField>
+
+<ParamField path="ai_model" type="string">
+  Specific AI model used for diagnosis (e.g., 'gpt-4', 'claude-3')
+</ParamField>
+
+<ParamField path="ai_requires_parts_replacement" type="boolean">
+  AI determination of whether parts replacement is needed
+</ParamField>
+
+<ParamField path="ai_cost_repair_labor" type="decimal">
+  AI-estimated cost for labor
+</ParamField>
+
+<ParamField path="ai_cost_replacement_parts" type="decimal">
+  AI-estimated cost for replacement parts
+</ParamField>
+
+<ParamField path="ai_cost_replacement_total" type="decimal">
+  AI-estimated total cost (labor + parts)
+</ParamField>
+
+## Casts
+
+```php
+protected function casts(): array
+{
+    return [
+        'estimated_cost' => 'decimal:2',
+        'ai_potential_causes' => 'array',
+        'ai_suggested_parts' => 'array',
+        'ai_diagnosed_at' => 'datetime',
+        'ai_requires_parts_replacement' => 'boolean',
+        'ai_cost_repair_labor' => 'decimal:2',
+        'ai_cost_replacement_parts' => 'decimal:2',
+        'ai_cost_replacement_total' => 'decimal:2',
+    ];
+}
+```
+
+- Decimal fields are cast with 2 decimal precision for accurate cost tracking
+- `ai_potential_causes` and `ai_suggested_parts` are automatically serialized/deserialized as arrays
+- `ai_diagnosed_at` is cast to Carbon datetime instance
+- `ai_requires_parts_replacement` is cast to boolean
+
+## Relationships
+
+### company()
+
+**Type:** `BelongsTo`
+
+Returns the company this order belongs to.
+
+```php
+public function company(): BelongsTo
+{
+    return $this->belongsTo(Company::class);
+}
+```
+
+### customer()
+
+**Type:** `BelongsTo`
+
+Returns the customer who owns the equipment being repaired.
+
+```php
+public function customer(): BelongsTo
+{
+    return $this->belongsTo(Customer::class);
+}
+```
+
+### equipment()
+
+**Type:** `BelongsTo`
+
+Returns the equipment being repaired in this order.
+
+```php
+public function equipment(): BelongsTo
+{
+    return $this->belongsTo(Equipment::class);
+}
+```
+
+### billingItems()
+
+**Type:** `HasMany`
+
+Returns all billing line items associated with this order.
+
+```php
+public function billingItems(): HasMany
+{
+    return $this->hasMany(BillingDocumentItem::class);
+}
+```
+
+### aiUsages()
+
+**Type:** `HasMany`
+
+Returns all AI usage records for this order.
+
+```php
+public function aiUsages(): HasMany
+{
+    return $this->hasMany(CompanyAiUsage::class);
+}
+```
+
+## Usage Examples
+
+### Creating a New Order
+
+```php
+$order = Order::create([
+    'company_id' => 1,
+    'customer_id' => 5,
+    'equipment_id' => 12,
+    'technician' => 'John Smith',
+    'symptoms' => 'Device not turning on, no LED indicators',
+    'status' => 'pending',
+]);
+```
+
+### Storing AI Diagnosis Results
+
+```php
+$order->update([
+    'ai_potential_causes' => [
+        'Power supply failure',
+        'Faulty motherboard',
+        'Blown capacitors',
+    ],
+    'ai_suggested_parts' => [
+        'Power supply unit (PSU-500W)',
+        'Replacement capacitors (100μF 25V)',
+    ],
+    'ai_technical_advice' => 'Test power supply voltage first. Check for bulging capacitors on motherboard.',
+    'ai_estimated_time' => '2-3 hours',
+    'ai_diagnosed_at' => now(),
+    'ai_tokens_used' => 1250,
+    'ai_provider' => 'openai',
+    'ai_model' => 'gpt-4',
+    'ai_requires_parts_replacement' => true,
+    'ai_cost_repair_labor' => 150.00,
+    'ai_cost_replacement_parts' => 75.50,
+    'ai_cost_replacement_total' => 225.50,
+]);
+```
+
+### Querying Orders with Relationships
+
+```php
+// Get all pending orders with customer and equipment details
+$pendingOrders = Order::where('status', 'pending')
+    ->with(['customer', 'equipment', 'company'])
+    ->orderBy('created_at', 'desc')
+    ->get();
+
+// Get orders with AI diagnosis
+$aiOrders = Order::whereNotNull('ai_diagnosed_at')
+    ->where('company_id', $companyId)
+    ->get();
+```
+
+### Working with AI Data
+
+```php
+// Display AI potential causes
+foreach ($order->ai_potential_causes as $cause) {
+    echo "- {$cause}\n";
+}
+
+// Display suggested parts
+foreach ($order->ai_suggested_parts as $part) {
+    echo "- {$part}\n";
+}
+
+// Check if parts replacement needed
+if ($order->ai_requires_parts_replacement) {
+    $totalCost = $order->ai_cost_replacement_total;
+    echo "Estimated repair cost: $" . number_format($totalCost, 2);
+}
+```
+
+### Updating Order Status
+
+```php
+// Start working on order
+$order->update([
+    'status' => 'in_progress',
+    'technician' => 'Jane Doe',
+]);
+
+// Complete order
+$order->update([
+    'status' => 'completed',
+]);
+```
+
+### Filtering by Status
+
+```php
+// Get orders for a specific company and status
+$inProgressOrders = Order::where('company_id', $companyId)
+    ->where('status', 'in_progress')
+    ->with('equipment.customer')
+    ->get();
+```
+
+### Cost Analysis
+
+```php
+// Calculate total AI-estimated costs for all orders
+$totalEstimated = Order::where('company_id', $companyId)
+    ->whereNotNull('ai_cost_replacement_total')
+    ->sum('ai_cost_replacement_total');
+
+// Compare AI estimate vs manual estimate
+if ($order->estimated_cost && $order->ai_cost_replacement_total) {
+    $difference = abs($order->estimated_cost - $order->ai_cost_replacement_total);
+    $percentDiff = ($difference / $order->estimated_cost) * 100;
+}
+```
+
+### AI Usage Tracking
+
+```php
+// Get total tokens used by company
+$totalTokens = Order::where('company_id', $companyId)
+    ->sum('ai_tokens_used');
+
+// Get orders by AI provider
+$openAIOrders = Order::where('ai_provider', 'openai')
+    ->where('company_id', $companyId)
+    ->count();
+```
+
+### Creating Billing from Order
+
+```php
+// Use AI cost estimates to create billing document
+$billingDocument = BillingDocument::create([
+    'company_id' => $order->company_id,
+    'customer_id' => $order->customer_id,
+    'subtotal' => $order->ai_cost_replacement_total,
+    'source' => 'order',
+    // ... other billing fields
+]);
+```
+
+## Source Reference
+
+Model file: `/home/daytona/workspace/source/app/Models/Order.php`

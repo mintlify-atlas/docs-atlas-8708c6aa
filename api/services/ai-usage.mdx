@@ -1,0 +1,334 @@
+---
+title: 'AI Usage Service'
+description: 'Track and validate AI diagnostic usage against company plan limits'
+---
+
+## Overview
+
+The `AiUsageService` manages AI diagnostic usage tracking, quota validation, and usage recording for companies. It enforces plan-based limits on queries and token consumption.
+
+**Namespace:** `App\Services\AiUsageService`
+
+**Dependencies:**
+- `AiPlanPolicyService` - Provides plan limit policies
+- `AiTokenEstimator` - Estimates token usage from character counts
+
+---
+
+## Methods
+
+### validateBeforeUsage
+
+Validates that a company can use AI diagnostics before making the request. Checks plan support, query limits, and token limits.
+
+```php
+public function validateBeforeUsage(
+    Company $company,
+    string $plan,
+    int $projectedPromptTokens,
+    ?string $yearMonth = null
+): void
+```
+
+#### Parameters
+
+<ParamField path="company" type="Company" required>
+  The company model instance requesting AI diagnostics
+</ParamField>
+
+<ParamField path="plan" type="string" required>
+  The subscription plan identifier (e.g., "starter", "professional", "enterprise")
+</ParamField>
+
+<ParamField path="projectedPromptTokens" type="int" required>
+  Estimated number of tokens for the prompt
+</ParamField>
+
+<ParamField path="yearMonth" type="string|null">
+  Year-month string in "Y-m" format. Defaults to current month if null
+</ParamField>
+
+#### Throws
+
+**`AiUsageException`** with specific status codes:
+
+- `blocked_plan` - Plan does not support AI features
+- `blocked_quota` - Monthly query limit exceeded
+- `blocked_tokens` - Monthly token limit would be exceeded
+
+#### Example Usage
+
+```php
+use App\Services\AiUsageService;
+use App\Services\Exceptions\AiUsageException;
+
+$aiUsage = app(AiUsageService::class);
+
+try {
+    $aiUsage->validateBeforeUsage(
+        company: $company,
+        plan: 'professional',
+        projectedPromptTokens: 1500
+    );
+    
+    // Proceed with AI diagnostic
+    $analysis = $aiDiagnostic->analyze(...);
+    
+} catch (AiUsageException $e) {
+    // Handle quota exceeded
+    return response()->json([
+        'error' => $e->getMessage(),
+        'status' => $e->status()
+    ], 429);
+}
+```
+
+---
+
+### validateAfterUsage
+
+Validates token usage after receiving the AI response. Ensures actual token consumption doesn't exceed limits.
+
+```php
+public function validateAfterUsage(
+    Company $company,
+    string $plan,
+    int $realTotalTokens,
+    ?string $yearMonth = null
+): void
+```
+
+#### Parameters
+
+<ParamField path="company" type="Company" required>
+  The company model instance
+</ParamField>
+
+<ParamField path="plan" type="string" required>
+  The subscription plan identifier
+</ParamField>
+
+<ParamField path="realTotalTokens" type="int" required>
+  Actual total tokens consumed (prompt + response)
+</ParamField>
+
+<ParamField path="yearMonth" type="string|null">
+  Year-month string in "Y-m" format. Defaults to current month if null
+</ParamField>
+
+#### Throws
+
+**`AiUsageException`** with status `blocked_tokens` if limit exceeded
+
+---
+
+### monthlyUsage
+
+Retrieves the current month's AI usage statistics for a company.
+
+```php
+public function monthlyUsage(
+    Company $company,
+    ?string $yearMonth = null
+): array
+```
+
+#### Parameters
+
+<ParamField path="company" type="Company" required>
+  The company model instance
+</ParamField>
+
+<ParamField path="yearMonth" type="string|null">
+  Year-month string in "Y-m" format. Defaults to current month if null
+</ParamField>
+
+#### Returns
+
+Returns an associative array:
+
+```php
+[
+    'queries_used' => int,  // Number of successful AI queries this month
+    'tokens_used' => int,   // Total tokens consumed this month
+]
+```
+
+#### Example Usage
+
+```php
+$usage = $aiUsage->monthlyUsage($company);
+
+echo "Queries used: {$usage['queries_used']}";
+echo "Tokens used: {$usage['tokens_used']}";
+
+// Check specific month
+$lastMonth = $aiUsage->monthlyUsage($company, '2025-12');
+```
+
+---
+
+### registerSuccess
+
+Records a successful AI diagnostic usage in the database.
+
+```php
+public function registerSuccess(
+    Company $company,
+    Order $order,
+    string $plan,
+    int $promptChars,
+    int $responseChars,
+    ?string $yearMonth = null
+): CompanyAiUsage
+```
+
+#### Parameters
+
+<ParamField path="company" type="Company" required>
+  The company model instance
+</ParamField>
+
+<ParamField path="order" type="Order" required>
+  The order that received the AI diagnostic
+</ParamField>
+
+<ParamField path="plan" type="string" required>
+  The subscription plan identifier at time of usage
+</ParamField>
+
+<ParamField path="promptChars" type="int" required>
+  Character count of the prompt sent to AI
+</ParamField>
+
+<ParamField path="responseChars" type="int" required>
+  Character count of the AI response received
+</ParamField>
+
+<ParamField path="yearMonth" type="string|null">
+  Year-month string in "Y-m" format. Defaults to current month if null
+</ParamField>
+
+#### Returns
+
+Returns the created `CompanyAiUsage` model instance with status `'success'`
+
+#### Example Usage
+
+```php
+$promptChars = mb_strlen($promptText);
+$responseChars = mb_strlen(json_encode($analysis, JSON_UNESCAPED_UNICODE));
+
+$usage = $aiUsage->registerSuccess(
+    company: $company,
+    order: $order,
+    plan: 'professional',
+    promptChars: $promptChars,
+    responseChars: $responseChars
+);
+
+echo "Tokens consumed: {$usage->total_tokens_estimated}";
+```
+
+---
+
+### registerBlocked
+
+Records a blocked or failed AI diagnostic attempt.
+
+```php
+public function registerBlocked(
+    Company $company,
+    ?Order $order,
+    string $plan,
+    string $status,
+    string $errorMessage,
+    int $promptChars = 0,
+    int $responseChars = 0,
+    ?string $yearMonth = null
+): CompanyAiUsage
+```
+
+#### Parameters
+
+<ParamField path="company" type="Company" required>
+  The company model instance
+</ParamField>
+
+<ParamField path="order" type="Order|null" required>
+  The order that attempted AI diagnostic (can be null for pre-order validation)
+</ParamField>
+
+<ParamField path="plan" type="string" required>
+  The subscription plan identifier
+</ParamField>
+
+<ParamField path="status" type="string" required>
+  The blocking status (e.g., "blocked_plan", "blocked_quota", "blocked_tokens")
+</ParamField>
+
+<ParamField path="errorMessage" type="string" required>
+  Human-readable error message describing why the request was blocked
+</ParamField>
+
+<ParamField path="promptChars" type="int">
+  Character count of the prompt (defaults to 0)
+</ParamField>
+
+<ParamField path="responseChars" type="int">
+  Character count of the response (defaults to 0)
+</ParamField>
+
+<ParamField path="yearMonth" type="string|null">
+  Year-month string in "Y-m" format. Defaults to current month if null
+</ParamField>
+
+#### Returns
+
+Returns the created `CompanyAiUsage` model instance with the specified error status
+
+#### Example Usage
+
+```php
+try {
+    $aiUsage->validateBeforeUsage($company, $plan, $tokens);
+} catch (AiUsageException $e) {
+    // Log the blocked attempt
+    $aiUsage->registerBlocked(
+        company: $company,
+        order: $order,
+        plan: $plan,
+        status: $e->status(),
+        errorMessage: $e->getMessage(),
+        promptChars: mb_strlen($promptText)
+    );
+    
+    throw $e;
+}
+```
+
+---
+
+## Token Estimation
+
+The service uses `AiTokenEstimator` to convert character counts to estimated tokens:
+
+```php
+$promptTokens = $tokenEstimator->estimateFromChars($promptChars);
+$responseTokens = $tokenEstimator->estimateFromChars($responseChars);
+$totalTokens = $promptTokens + $responseTokens;
+```
+
+---
+
+## Usage Tracking
+
+All usage records are stored in the `company_ai_usage` table with:
+
+- `year_month` - Month identifier for quota tracking
+- `status` - `'success'`, `'blocked_plan'`, `'blocked_quota'`, or `'blocked_tokens'`
+- `plan_snapshot` - The plan at time of usage
+- Token estimates for prompt, response, and total
+- Error messages for blocked attempts
+
+Only records with `status = 'success'` count toward monthly limits.

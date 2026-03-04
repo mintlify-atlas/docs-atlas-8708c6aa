@@ -1,0 +1,564 @@
+---
+title: AI Diagnostics System
+description: How ElectroFix AI uses artificial intelligence to diagnose equipment issues and track usage
+---
+
+## Overview
+
+ElectroFix AI includes an **AI-powered diagnostic system** that analyzes equipment symptoms and provides repair recommendations. The system tracks token usage, enforces plan-based quotas, and records all AI interactions for billing and analytics.
+
+## Core Components
+
+### 1. AI Diagnostic Service
+
+The `AiDiagnosticService` analyzes equipment symptoms and generates diagnostic reports:
+
+```php
+// app/Services/AiDiagnosticService.php
+class AiDiagnosticService
+{
+    public function analyze(
+        string $type, 
+        string $brand, 
+        ?string $model, 
+        string $symptoms
+    ): array {
+        $text = mb_strtolower($symptoms);
+
+        $causes = [];
+        $parts = [];
+        $time = '2-4 horas';
+        $advice = 'Realiza primero una inspección eléctrica básica...';
+        $repairLaborCost = 500.00;
+
+        // Analyze symptom patterns
+        if (str_contains($text, 'no enciende') || str_contains($text, 'enciende')) {
+            $causes[] = 'Falla en fuente de alimentación o tarjeta principal.';
+            $parts[] = 'Tarjeta electrónica';
+            $parts[] = 'Fusible térmico';
+            $time = '3-5 horas';
+            $repairLaborCost = 850.00;
+        }
+
+        if (str_contains($text, 'ruido') || str_contains($text, 'vibr')) {
+            $causes[] = 'Desgaste de rodamientos o desbalance mecánico.';
+            $parts[] = 'Rodamientos';
+            $parts[] = 'Soportes antivibración';
+            $time = '2-3 horas';
+            $repairLaborCost = max($repairLaborCost, 700.00);
+        }
+
+        if (str_contains($text, 'fuga') || str_contains($text, 'agua')) {
+            $causes[] = 'Deterioro en sellos o mangueras.';
+            $parts[] = 'Kit de sellos';
+            $parts[] = 'Manguera de drenaje';
+            $time = '1-2 horas';
+            $repairLaborCost = max($repairLaborCost, 600.00);
+        }
+
+        // Calculate costs
+        $requiresPartsReplacement = ! empty($parts);
+        $replacementPartsCost = $requiresPartsReplacement 
+            ? count($parts) * 320.00 
+            : 0.00;
+        $replacementTotalCost = $requiresPartsReplacement
+            ? round($replacementPartsCost + $repairLaborCost, 2)
+            : 0.00;
+
+        return [
+            'equipment' => trim($brand.' '.$type.' '.($model ?? '')),
+            'potential_causes' => array_values(array_unique($causes)),
+            'estimated_time' => $time,
+            'suggested_parts' => array_values(array_unique($parts)),
+            'technical_advice' => $advice,
+            'requires_parts_replacement' => $requiresPartsReplacement,
+            'cost_suggestion' => [
+                'repair_labor_cost' => round($repairLaborCost, 2),
+                'replacement_parts_cost' => round($replacementPartsCost, 2),
+                'replacement_total_cost' => $replacementTotalCost,
+            ],
+        ];
+    }
+}
+```
+
+### 2. Token Estimation
+
+The `AiTokenEstimator` estimates token usage based on character count:
+
+```php
+// app/Services/AiTokenEstimator.php
+class AiTokenEstimator
+{
+    /**
+     * Estimate tokens from character count
+     * Uses 4 characters per token as approximation
+     */
+    public function estimateFromChars(int $chars): int
+    {
+        if ($chars <= 0) {
+            return 0;
+        }
+
+        return (int) ceil($chars / 4);
+    }
+}
+```
+
+**Estimation Formula**: `tokens = ceil(characters / 4)`
+
+### 3. Usage Tracking Service
+
+The `AiUsageService` manages quotas and tracks consumption:
+
+```php
+// app/Services/AiUsageService.php
+class AiUsageService
+{
+    public function __construct(
+        private readonly AiPlanPolicyService $planPolicyService,
+        private readonly AiTokenEstimator $tokenEstimator
+    ) {}
+
+    /**
+     * Validate before making AI request
+     */
+    public function validateBeforeUsage(
+        Company $company, 
+        string $plan, 
+        int $projectedPromptTokens, 
+        ?string $yearMonth = null
+    ): void {
+        $yearMonth ??= now()->format('Y-m');
+
+        // Check if plan supports AI
+        if (! $this->planPolicyService->supportsAi($plan)) {
+            throw new AiUsageException(
+                'blocked_plan', 
+                'Tu plan actual no incluye Asistente IA.'
+            );
+        }
+
+        $usage = $this->monthlyUsage($company, $yearMonth);
+
+        // Check query quota
+        if ($usage['queries_used'] >= $this->planPolicyService->queryLimit($plan)) {
+            throw new AiUsageException(
+                'blocked_quota', 
+                'Se alcanzó el límite mensual de consultas IA para tu empresa.'
+            );
+        }
+
+        // Check token quota (before request)
+        if (($usage['tokens_used'] + $projectedPromptTokens) > 
+            $this->planPolicyService->tokenLimit($plan)) {
+            throw new AiUsageException(
+                'blocked_tokens', 
+                'Se alcanzó el límite mensual de consumo IA para tu empresa.'
+            );
+        }
+    }
+
+    /**
+     * Get monthly usage statistics
+     */
+    public function monthlyUsage(Company $company, ?string $yearMonth = null): array
+    {
+        $yearMonth ??= now()->format('Y-m');
+
+        $successRows = CompanyAiUsage::query()
+            ->where('company_id', $company->id)
+            ->where('year_month', $yearMonth)
+            ->where('status', 'success');
+
+        return [
+            'queries_used' => (int) (clone $successRows)->count(),
+            'tokens_used' => (int) (clone $successRows)->sum('total_tokens_estimated'),
+        ];
+    }
+
+    /**
+     * Record successful AI usage
+     */
+    public function registerSuccess(
+        Company $company,
+        Order $order,
+        string $plan,
+        int $promptChars,
+        int $responseChars,
+        ?string $yearMonth = null
+    ): CompanyAiUsage {
+        $yearMonth ??= now()->format('Y-m');
+        $promptTokens = $this->tokenEstimator->estimateFromChars($promptChars);
+        $responseTokens = $this->tokenEstimator->estimateFromChars($responseChars);
+        $totalTokens = $promptTokens + $responseTokens;
+
+        return CompanyAiUsage::query()->create([
+            'company_id' => $company->id,
+            'order_id' => $order->id,
+            'year_month' => $yearMonth,
+            'plan_snapshot' => $plan,
+            'prompt_chars' => $promptChars,
+            'response_chars' => $responseChars,
+            'prompt_tokens_estimated' => $promptTokens,
+            'response_tokens_estimated' => $responseTokens,
+            'total_tokens_estimated' => $totalTokens,
+            'status' => 'success',
+            'error_message' => null,
+        ]);
+    }
+}
+```
+
+## AI Usage Tracking
+
+### Database Schema
+
+```php
+// database/migrations/create_company_ai_usages_table.php
+Schema::create('company_ai_usages', function (Blueprint $table): void {
+    $table->id();
+    $table->foreignId('company_id')->constrained()->cascadeOnDelete();
+    $table->foreignId('order_id')->nullable()->constrained()->nullOnDelete();
+    $table->char('year_month', 7);  // Format: '2026-03'
+    $table->string('plan_snapshot', 40);
+    $table->unsignedInteger('prompt_chars')->default(0);
+    $table->unsignedInteger('response_chars')->default(0);
+    $table->unsignedInteger('prompt_tokens_estimated')->default(0);
+    $table->unsignedInteger('response_tokens_estimated')->default(0);
+    $table->unsignedInteger('total_tokens_estimated')->default(0);
+    $table->enum('status', [
+        'success',         // AI query succeeded
+        'blocked_plan',    // Plan doesn't support AI
+        'blocked_quota',   // Monthly query limit reached
+        'blocked_tokens',  // Monthly token limit reached
+        'error'           // Technical error
+    ]);
+    $table->string('error_message')->nullable();
+    $table->timestamps();
+
+    $table->index(['company_id', 'year_month']);
+    $table->index(['company_id', 'status']);
+});
+```
+
+### CompanyAiUsage Model
+
+```php
+// app/Models/CompanyAiUsage.php
+class CompanyAiUsage extends Model
+{
+    protected $fillable = [
+        'company_id',
+        'order_id',
+        'year_month',
+        'plan_snapshot',
+        'prompt_chars',
+        'response_chars',
+        'prompt_tokens_estimated',
+        'response_tokens_estimated',
+        'total_tokens_estimated',
+        'status',
+        'error_message',
+    ];
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function order(): BelongsTo
+    {
+        return $this->belongsTo(Order::class);
+    }
+}
+```
+
+## Order AI Fields
+
+Diagnostic results are stored on the `Order` model:
+
+```php
+// app/Models/Order.php:14-47
+protected $fillable = [
+    'company_id',
+    'customer_id',
+    'equipment_id',
+    'technician',
+    'symptoms',
+    'status',
+    'estimated_cost',
+    
+    // AI diagnostic fields
+    'ai_potential_causes',           // array
+    'ai_estimated_time',             // string
+    'ai_suggested_parts',            // array
+    'ai_technical_advice',           // text
+    'ai_diagnosed_at',               // datetime
+    'ai_tokens_used',                // integer
+    'ai_provider',                   // string (e.g., 'local_stub')
+    'ai_model',                      // string (e.g., 'heuristic-v1')
+    'ai_requires_parts_replacement', // boolean
+    'ai_cost_repair_labor',          // decimal
+    'ai_cost_replacement_parts',     // decimal
+    'ai_cost_replacement_total',     // decimal
+];
+
+protected function casts(): array
+{
+    return [
+        'ai_potential_causes' => 'array',
+        'ai_suggested_parts' => 'array',
+        'ai_diagnosed_at' => 'datetime',
+        'ai_requires_parts_replacement' => 'boolean',
+        'ai_cost_repair_labor' => 'decimal:2',
+        'ai_cost_replacement_parts' => 'decimal:2',
+        'ai_cost_replacement_total' => 'decimal:2',
+    ];
+}
+```
+
+## Order Creation with AI
+
+The `OrderCreationService` handles AI diagnostic requests:
+
+```php
+// app/Services/OrderCreationService.php (simplified)
+public function create(User $actor, array $payload): array
+{
+    // Create base order
+    $order = Order::query()->create([...]);
+
+    // Check if AI diagnosis was requested
+    if (empty($payload['request_ai_diagnosis'])) {
+        return ['order' => $order, 'ai_applied' => false];
+    }
+
+    // Prevent duplicate AI usage
+    if ($order->ai_diagnosed_at) {
+        return [
+            'order' => $order,
+            'ai_warning' => 'Esta orden ya utilizó su diagnóstico IA disponible.'
+        ];
+    }
+
+    // Get company and subscription
+    $company = $order->company()->with('subscription')->firstOrFail();
+    $plan = (string) ($company->subscription?->plan ?? 'starter');
+
+    // Calculate projected token usage
+    $promptChars = $this->promptChars($equipment, $payload['symptoms']);
+    $projectedPromptTokens = $this->tokenEstimator->estimateFromChars($promptChars);
+
+    // Validate quota BEFORE making AI request
+    try {
+        $this->aiUsageService->validateBeforeUsage(
+            $company, 
+            $plan, 
+            $projectedPromptTokens
+        );
+    } catch (AiUsageException $exception) {
+        // Record blocked attempt
+        $this->aiUsageService->registerBlocked(
+            $company,
+            $order,
+            $plan,
+            $exception->status(),
+            $exception->getMessage(),
+            $promptChars
+        );
+
+        return [
+            'order' => $order,
+            'ai_applied' => false,
+            'ai_warning' => $exception->getMessage(),
+        ];
+    }
+
+    // Perform AI analysis
+    $analysis = $this->aiDiagnosticService->analyze(
+        $equipment->type,
+        $equipment->brand,
+        $equipment->model,
+        $payload['symptoms']
+    );
+
+    // Calculate actual token usage
+    $responseChars = mb_strlen(json_encode($analysis, JSON_UNESCAPED_UNICODE));
+    $totalTokens = $this->tokenEstimator->estimateFromChars(
+        $promptChars + $responseChars
+    );
+
+    // Validate AFTER to ensure we didn't exceed limit
+    try {
+        $this->aiUsageService->validateAfterUsage($company, $plan, $totalTokens);
+    } catch (AiUsageException $exception) {
+        $this->aiUsageService->registerBlocked(...);
+        return ['ai_warning' => $exception->getMessage()];
+    }
+
+    // Save AI results to order
+    $order->update([
+        'ai_potential_causes' => $analysis['potential_causes'],
+        'ai_estimated_time' => $analysis['estimated_time'],
+        'ai_suggested_parts' => $analysis['suggested_parts'],
+        'ai_technical_advice' => $analysis['technical_advice'],
+        'ai_diagnosed_at' => now(),
+        'ai_tokens_used' => $totalTokens,
+        'ai_provider' => 'local_stub',
+        'ai_model' => 'heuristic-v1',
+        'ai_requires_parts_replacement' => $analysis['requires_parts_replacement'],
+        'ai_cost_repair_labor' => $analysis['cost_suggestion']['repair_labor_cost'],
+        'ai_cost_replacement_parts' => $analysis['cost_suggestion']['replacement_parts_cost'],
+        'ai_cost_replacement_total' => $analysis['cost_suggestion']['replacement_total_cost'],
+    ]);
+
+    // Record successful usage
+    $this->aiUsageService->registerSuccess(
+        $company, 
+        $order, 
+        $plan, 
+        $promptChars, 
+        $responseChars
+    );
+
+    return ['order' => $order, 'ai_applied' => true];
+}
+```
+
+## Usage Quotas by Plan
+
+| Plan | Queries/Month | Tokens/Month |
+|------|---------------|-------------|
+| Starter | 0 | 0 |
+| Pro | 0 | 0 |
+| Enterprise | 200 | 120,000 |
+| Developer Test | 500 | 500,000 |
+
+Defined in `AiPlanPolicyService.php:10-18`
+
+## AI Usage Exceptions
+
+The system throws specific exceptions when quota limits are reached:
+
+```php
+// app/Services/Exceptions/AiUsageException.php
+class AiUsageException extends Exception
+{
+    public function __construct(
+        private readonly string $status,
+        string $message
+    ) {
+        parent::__construct($message);
+    }
+
+    public function status(): string
+    {
+        return $this->status;
+    }
+}
+```
+
+**Exception Types**:
+- `blocked_plan` - Plan doesn't support AI features
+- `blocked_quota` - Monthly query limit reached
+- `blocked_tokens` - Monthly token limit reached
+
+## Viewing Usage Statistics
+
+In the orders page, users see their current usage:
+
+```php
+// app/Http/Controllers/Worker/OrderController.php:47-51
+$plan = (string) ($user?->company?->subscription?->plan ?? 'starter');
+$aiEnabled = $aiPlanPolicyService->supportsAi($plan);
+$monthlyUsage = $user?->company
+    ? $aiUsageService->monthlyUsage($user->company)
+    : ['queries_used' => 0, 'tokens_used' => 0];
+
+return view('worker.orders.index', [
+    'aiPlan' => $plan,
+    'aiEnabled' => $aiEnabled,
+    'aiQueryLimit' => $aiPlanPolicyService->queryLimit($plan),
+    'aiTokenLimit' => $aiPlanPolicyService->tokenLimit($plan),
+    'aiQueriesUsed' => $monthlyUsage['queries_used'],
+    'aiTokensUsed' => $monthlyUsage['tokens_used'],
+]);
+```
+
+## One-Time Diagnosis Per Order
+
+Each order can only use AI diagnostics once:
+
+```php
+if ($order->ai_diagnosed_at) {
+    return [
+        'ai_applied' => false,
+        'ai_warning' => 'Esta orden ya utilizó su diagnóstico IA disponible.'
+    ];
+}
+```
+
+This prevents quota abuse and ensures fair usage.
+
+## Token Calculation Example
+
+```php
+// Prompt construction
+private function promptChars(Equipment $equipment, string $symptoms): int
+{
+    $prompt = sprintf(
+        'Equipo: %s %s %s. Síntomas: %s',
+        $equipment->type,
+        $equipment->brand,
+        $equipment->model ?? '',
+        $symptoms
+    );
+
+    return mb_strlen($prompt);
+}
+
+// Example:
+// "Equipo: Lavadora Samsung WF45. Síntomas: No enciende y hace ruido extraño"
+// Characters: 74
+// Estimated tokens: ceil(74 / 4) = 19 tokens
+```
+
+## Best Practices
+
+### 1. Always Validate Before and After
+
+Validate quota before making the AI request (using projected tokens) and after (using actual tokens) to handle edge cases.
+
+### 2. Track Blocked Attempts
+
+Record all blocked attempts for analytics and to help users understand why they were blocked:
+
+```php
+$this->aiUsageService->registerBlocked(
+    $company,
+    $order,
+    $plan,
+    $exception->status(),
+    $exception->getMessage(),
+    $promptChars
+);
+```
+
+### 3. Show Usage in UI
+
+Always display current usage and limits to users so they can manage their quota.
+
+### 4. Monthly Reset
+
+Usage is tracked by `year_month` (e.g., '2026-03'), automatically resetting each month.
+
+### 5. Estimate Conservatively
+
+The 4-characters-per-token ratio is conservative to avoid unexpected quota exhaustion.
+
+## Related Topics
+
+- [Subscription Plans](/concepts/subscription-plans) - Plan-based AI access
+- [Multi-Tenancy](/concepts/multi-tenancy) - Company-level usage tracking
+- [Roles & Permissions](/concepts/roles-permissions) - Who can request diagnostics

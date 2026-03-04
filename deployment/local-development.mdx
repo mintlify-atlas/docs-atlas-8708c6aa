@@ -1,0 +1,318 @@
+---
+title: "Local Development Setup"
+description: "Complete guide for setting up ElectroFix AI in your local development environment"
+---
+
+## Overview
+
+This guide walks you through setting up ElectroFix AI for local development using XAMPP (or similar LAMP/WAMP stack) with MySQL.
+
+## Prerequisites
+
+### Required Software
+
+- **PHP**: Version 8.2 or higher
+- **Composer**: Latest stable version
+- **XAMPP/LAMP/WAMP**: For Apache and MySQL
+- **Node.js**: For asset compilation (if needed)
+- **Git**: For version control
+
+### System Requirements
+
+- PHP Extensions:
+  - PDO (MySQL/SQLite)
+  - Mbstring
+  - OpenSSL
+  - JSON
+  - Tokenizer
+  - XML
+  - Ctype
+  - BCMath
+
+## Installation Steps
+
+### 1. Clone the Repository
+
+```bash
+git clone <repository-url>
+cd electrofix-ai
+```
+
+### 2. Install Dependencies
+
+```bash
+composer install
+```
+
+### 3. Environment Configuration
+
+Copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your local configuration:
+
+```env
+APP_NAME="ElectroFix AI"
+APP_ENV=local
+APP_DEBUG=true
+APP_URL=http://localhost:8000
+
+# For MySQL with XAMPP
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=electrofix_ai
+DB_USERNAME=root
+DB_PASSWORD=
+
+# Or for SQLite (simpler option)
+DB_CONNECTION=sqlite
+# Leave other DB_ variables commented
+
+SESSION_DRIVER=database
+CACHE_STORE=database
+QUEUE_CONNECTION=database
+```
+
+### 4. Generate Application Key
+
+```bash
+php artisan key:generate
+```
+
+### 5. Database Setup
+
+#### Option A: MySQL (XAMPP)
+
+1. Start XAMPP and ensure MySQL is running
+2. Create a database:
+
+```sql
+CREATE DATABASE electrofix_ai CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+3. Run migrations:
+
+```bash
+php artisan migrate
+```
+
+#### Option B: SQLite (Simpler)
+
+1. Create the database file:
+
+```bash
+touch database/database.sqlite
+```
+
+2. Ensure `.env` has:
+
+```env
+DB_CONNECTION=sqlite
+```
+
+3. Run migrations:
+
+```bash
+php artisan migrate
+```
+
+### 6. Seed Demo Data
+
+Populate the database with sample data:
+
+```bash
+php artisan db:seed
+```
+
+This creates:
+- 2 demo companies
+- 3 test users (admin, worker, developer)
+- Sample customers, equipment, and orders
+- Inventory items
+- Billing documents
+
+### 7. Start Development Server
+
+```bash
+php artisan serve
+```
+
+Or use composer script:
+
+```bash
+composer dev
+```
+
+The application will be available at `http://localhost:8000`
+
+## Demo Login Credentials
+
+After seeding, you can log in with:
+
+### Admin User
+- **Email**: `admin@electrofix.ai`
+- **Password**: `password123`
+- **Company**: ElectroFix Cliente Demo
+- **Access**: Full access to billing and inventory
+
+### Worker User
+- **Email**: `worker@electrofix.ai`
+- **Password**: `password123`
+- **Company**: ElectroFix Cliente Demo
+- **Access**: Inventory only (no billing)
+
+### Developer User
+- **Email**: `developer@electrofix.ai`
+- **Password**: `password123`
+- **Company**: ElectroFix Developer Lab
+- **Access**: Full access (testing account)
+
+## Development Tools
+
+### Laravel Tinker
+
+Interactive REPL for testing:
+
+```bash
+php artisan tinker
+```
+
+### Laravel Pail
+
+Real-time log monitoring:
+
+```bash
+php artisan pail
+```
+
+### Code Quality
+
+Run Laravel Pint for code formatting:
+
+```bash
+./vendor/bin/pint
+```
+
+### Testing
+
+Run the test suite:
+
+```bash
+composer test
+# or
+php artisan test
+```
+
+## Debugging Tools
+
+### Enable Debug Mode
+
+In `.env`:
+
+```env
+APP_DEBUG=true
+LOG_LEVEL=debug
+```
+
+### Log Channels
+
+Logs are written to `storage/logs/laravel.log` by default.
+
+Available channels:
+- `stack`: Multiple channels
+- `single`: Single file
+- `daily`: Rotating daily logs
+- `stderr`: Standard error output
+
+Configure in `.env`:
+
+```env
+LOG_CHANNEL=stack
+LOG_STACK=single
+```
+
+### Email Testing
+
+For local email testing, use log driver:
+
+```env
+MAIL_MAILER=log
+```
+
+Emails will be written to logs instead of sent.
+
+## Queue Workers
+
+For background job processing:
+
+```bash
+php artisan queue:work
+```
+
+Or for development with auto-reload:
+
+```bash
+php artisan queue:listen
+```
+
+## Common Issues
+
+### Permission Errors
+
+Ensure storage and cache directories are writable:
+
+```bash
+chmod -R 775 storage bootstrap/cache
+```
+
+### Database Connection Failed
+
+Verify:
+- MySQL is running (check XAMPP control panel)
+- Database exists
+- Credentials in `.env` are correct
+- Port 3306 is not blocked
+
+### Application Key Not Set
+
+Run:
+
+```bash
+php artisan key:generate
+```
+
+### Cache Issues
+
+Clear application cache:
+
+```bash
+php artisan cache:clear
+php artisan config:clear
+php artisan route:clear
+php artisan view:clear
+```
+
+## Quick Setup Script
+
+Use the composer setup script for automated installation:
+
+```bash
+composer setup
+```
+
+This runs:
+1. `composer install`
+2. Creates `.env` from `.env.example`
+3. Generates application key
+4. Runs migrations
+
+## Next Steps
+
+- [Configuration Guide](/deployment/configuration) - Configure environment variables
+- [Database Migrations](/deployment/migrations) - Understand database schema
+- [Seeders](/deployment/seeders) - Learn about demo data
+- [Production Deployment](/deployment/production) - Deploy to production

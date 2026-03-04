@@ -1,0 +1,804 @@
+---
+title: 'Installation Guide'
+description: 'Complete installation guide for ElectroFix AI on local development and production environments'
+---
+
+## System Requirements
+
+Before installing ElectroFix AI, ensure your system meets these requirements:
+
+### Minimum Requirements
+
+<CardGroup cols={2}>
+  <Card title="PHP" icon="php">
+    **Version:** 8.2 or higher  
+    **Required Extensions:**
+    - PDO (PHP Data Objects)
+    - pdo_mysql or pdo_sqlite
+    - mbstring
+    - OpenSSL
+    - JSON
+    - cURL
+    - XML
+    - Tokenizer
+    - Fileinfo
+  </Card>
+  
+  <Card title="Database" icon="database">
+    **Supported Databases:**
+    - MySQL 5.7+ or 8.0+
+    - MariaDB 10.3+
+    - SQLite 3.8.8+ (development only)
+    
+    **Recommended:** MySQL 8.0+
+  </Card>
+  
+  <Card title="Web Server" icon="server">
+    **Development:**
+    - Built-in PHP server (via `php artisan serve`)
+    - XAMPP/WAMP/MAMP
+    
+    **Production:**
+    - Apache 2.4+ with mod_rewrite
+    - Nginx 1.18+
+  </Card>
+  
+  <Card title="Additional Tools" icon="toolbox">
+    - **Composer** 2.0+
+    - **Git** (for version control)
+    - **Node.js** 18+ (optional, for asset compilation)
+  </Card>
+</CardGroup>
+
+<Note>
+  ElectroFix AI uses **Laravel 12** which requires PHP 8.2+. Older PHP versions are not supported.
+</Note>
+
+## Installation Methods
+
+<Tabs>
+  <Tab title="XAMPP + MySQL">
+    ### XAMPP Installation (Windows/macOS/Linux)
+    
+    This is the recommended method for local development on Windows.
+    
+    <Steps>
+      <Step title="Install XAMPP">
+        1. Download XAMPP from [apachefriends.org](https://www.apachefriends.org/)
+        2. Install with PHP 8.2+ support
+        3. Start Apache and MySQL services from XAMPP Control Panel
+        
+        <Warning>
+          Ensure you select PHP 8.2 or higher during installation. XAMPP 8.2.12 or newer is recommended.
+        </Warning>
+      </Step>
+      
+      <Step title="Verify PHP Installation">
+        Open a terminal/command prompt and check PHP version:
+        
+        ```bash
+        php -v
+        ```
+        
+        Expected output:
+        ```
+        PHP 8.2.x (cli) (built: ...)
+        ```
+        
+        Verify required extensions:
+        ```bash
+        php -m | grep -E "pdo|mysql|mbstring|openssl|json|curl"
+        ```
+      </Step>
+      
+      <Step title="Install Composer">
+        1. Download Composer from [getcomposer.org](https://getcomposer.org/download/)
+        2. Run the installer
+        3. Verify installation:
+        
+        ```bash
+        composer --version
+        ```
+      </Step>
+      
+      <Step title="Create MySQL Database">
+        1. Open **phpMyAdmin** (http://localhost/phpmyadmin)
+        2. Click "New" to create a database
+        3. Enter database name: `electrofix_ai`
+        4. Select collation: `utf8mb4_unicode_ci`
+        5. Click "Create"
+        
+        Alternatively, use MySQL CLI:
+        ```sql
+        CREATE DATABASE electrofix_ai CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+        ```
+      </Step>
+      
+      <Step title="Clone and Configure">
+        Navigate to your XAMPP htdocs directory:
+        
+        ```bash
+        # Windows
+        cd C:\xampp\htdocs
+        
+        # macOS/Linux
+        cd /Applications/XAMPP/htdocs
+        ```
+        
+        Clone the repository:
+        ```bash
+        git clone <your-repo-url> ElectroFix-AI
+        cd ElectroFix-AI
+        ```
+        
+        Install dependencies:
+        ```bash
+        composer install
+        ```
+      </Step>
+      
+      <Step title="Environment Configuration">
+        Create and configure your `.env` file:
+        
+        ```bash
+        cp .env.example .env
+        ```
+        
+        Edit `.env` with your database settings:
+        
+        ```bash .env
+        APP_NAME="ElectroFix AI"
+        APP_ENV=local
+        APP_KEY=
+        APP_DEBUG=true
+        APP_URL=http://localhost/ElectroFix-AI/public
+        
+        DB_CONNECTION=mysql
+        DB_HOST=127.0.0.1
+        DB_PORT=3306
+        DB_DATABASE=electrofix_ai
+        DB_USERNAME=root
+        DB_PASSWORD=
+        
+        SESSION_DRIVER=database
+        QUEUE_CONNECTION=database
+        CACHE_STORE=database
+        ```
+        
+        <Note>
+          The default XAMPP MySQL root password is empty. If you've set a password, update `DB_PASSWORD`.
+        </Note>
+        
+        Generate application key:
+        ```bash
+        php artisan key:generate
+        ```
+      </Step>
+      
+      <Step title="Run Migrations and Seeders">
+        Set up the database schema and demo data:
+        
+        ```bash
+        php artisan migrate:fresh --seed
+        ```
+        
+        Expected output:
+        ```
+        Dropped all tables successfully.
+        Migration table created successfully.
+        Migrating: 0001_01_01_000000_create_users_table
+        Migrated:  0001_01_01_000000_create_users_table (45.23ms)
+        ...
+        Seeding: Database\Seeders\CompanySeeder
+        Seeded:  Database\Seeders\CompanySeeder (123.45ms)
+        ...
+        Database seeding completed successfully.
+        ```
+      </Step>
+      
+      <Step title="Access the Application">
+        **Option 1: PHP Built-in Server**
+        ```bash
+        php artisan serve
+        ```
+        Access at: http://127.0.0.1:8000
+        
+        **Option 2: XAMPP Apache**
+        Access at: http://localhost/ElectroFix-AI/public
+        
+        <Note>
+          For XAMPP Apache, ensure `mod_rewrite` is enabled and `.htaccess` files are allowed.
+        </Note>
+      </Step>
+    </Steps>
+  </Tab>
+  
+  <Tab title="Linux/macOS">
+    ### Native Linux/macOS Installation
+    
+    <Steps>
+      <Step title="Install PHP 8.2+">
+        **Ubuntu/Debian:**
+        ```bash
+        sudo apt update
+        sudo apt install -y php8.2 php8.2-cli php8.2-fpm php8.2-mysql \
+          php8.2-mbstring php8.2-xml php8.2-curl php8.2-zip php8.2-gd \
+          php8.2-intl php8.2-bcmath
+        ```
+        
+        **macOS (Homebrew):**
+        ```bash
+        brew install php@8.2
+        brew link php@8.2 --force --overwrite
+        ```
+        
+        Verify installation:
+        ```bash
+        php -v
+        ```
+      </Step>
+      
+      <Step title="Install MySQL">
+        **Ubuntu/Debian:**
+        ```bash
+        sudo apt install -y mysql-server
+        sudo systemctl start mysql
+        sudo mysql_secure_installation
+        ```
+        
+        **macOS:**
+        ```bash
+        brew install mysql
+        brew services start mysql
+        ```
+        
+        Create database:
+        ```bash
+        mysql -u root -p
+        ```
+        
+        ```sql
+        CREATE DATABASE electrofix_ai CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+        CREATE USER 'electrofix'@'localhost' IDENTIFIED BY 'secure_password';
+        GRANT ALL PRIVILEGES ON electrofix_ai.* TO 'electrofix'@'localhost';
+        FLUSH PRIVILEGES;
+        EXIT;
+        ```
+      </Step>
+      
+      <Step title="Install Composer">
+        ```bash
+        curl -sS https://getcomposer.org/installer | php
+        sudo mv composer.phar /usr/local/bin/composer
+        composer --version
+        ```
+      </Step>
+      
+      <Step title="Clone and Setup">
+        ```bash
+        cd /var/www  # or your preferred directory
+        git clone <your-repo-url> electrofix-ai
+        cd electrofix-ai
+        composer install
+        ```
+      </Step>
+      
+      <Step title="Configure Environment">
+        ```bash
+        cp .env.example .env
+        php artisan key:generate
+        ```
+        
+        Edit `.env`:
+        ```bash .env
+        APP_NAME="ElectroFix AI"
+        APP_ENV=local
+        APP_DEBUG=true
+        APP_URL=http://localhost:8000
+        
+        DB_CONNECTION=mysql
+        DB_HOST=127.0.0.1
+        DB_PORT=3306
+        DB_DATABASE=electrofix_ai
+        DB_USERNAME=electrofix
+        DB_PASSWORD=secure_password
+        ```
+      </Step>
+      
+      <Step title="Set Permissions">
+        ```bash
+        sudo chown -R www-data:www-data storage bootstrap/cache
+        sudo chmod -R 775 storage bootstrap/cache
+        ```
+        
+        Or for development:
+        ```bash
+        chmod -R 777 storage bootstrap/cache
+        ```
+      </Step>
+      
+      <Step title="Database Setup">
+        ```bash
+        php artisan migrate:fresh --seed
+        ```
+      </Step>
+      
+      <Step title="Start Development Server">
+        ```bash
+        php artisan serve
+        ```
+        
+        Access at: http://127.0.0.1:8000
+      </Step>
+    </Steps>
+  </Tab>
+  
+  <Tab title="Docker">
+    ### Docker Installation
+    
+    <Warning>
+      Laravel Sail configuration is included but may require additional setup. This method is best for users familiar with Docker.
+    </Warning>
+    
+    <Steps>
+      <Step title="Install Docker">
+        Install Docker Desktop for your platform:
+        - [Docker for Windows](https://docs.docker.com/desktop/install/windows-install/)
+        - [Docker for Mac](https://docs.docker.com/desktop/install/mac-install/)
+        - [Docker for Linux](https://docs.docker.com/desktop/install/linux-install/)
+      </Step>
+      
+      <Step title="Clone Repository">
+        ```bash
+        git clone <your-repo-url> electrofix-ai
+        cd electrofix-ai
+        ```
+      </Step>
+      
+      <Step title="Install Dependencies">
+        Since Sail requires Composer dependencies first:
+        
+        ```bash
+        docker run --rm \
+          -u "$(id -u):$(id -g)" \
+          -v "$(pwd):/var/www/html" \
+          -w /var/www/html \
+          laravelsail/php82-composer:latest \
+          composer install --ignore-platform-reqs
+        ```
+      </Step>
+      
+      <Step title="Configure Environment">
+        ```bash
+        cp .env.example .env
+        ```
+        
+        Update `.env` for Docker:
+        ```bash .env
+        DB_CONNECTION=mysql
+        DB_HOST=mysql
+        DB_PORT=3306
+        DB_DATABASE=electrofix_ai
+        DB_USERNAME=sail
+        DB_PASSWORD=password
+        ```
+      </Step>
+      
+      <Step title="Start Sail">
+        ```bash
+        ./vendor/bin/sail up -d
+        ./vendor/bin/sail artisan key:generate
+        ./vendor/bin/sail artisan migrate:fresh --seed
+        ```
+        
+        Access at: http://localhost
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+## Database Configuration Options
+
+### SQLite (Quick Testing)
+
+For rapid local development without MySQL:
+
+```bash .env
+DB_CONNECTION=sqlite
+# Comment out or remove MySQL settings
+```
+
+Create the database file:
+```bash
+touch database/database.sqlite
+php artisan migrate:fresh --seed
+```
+
+<Note>
+  SQLite is perfect for quick testing but not recommended for production or multi-user scenarios.
+</Note>
+
+### MySQL Configuration
+
+Recommended for production-like development:
+
+```bash .env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=electrofix_ai
+DB_USERNAME=root
+DB_PASSWORD=your_password
+```
+
+### MariaDB Configuration
+
+Drop-in replacement for MySQL:
+
+```bash .env
+DB_CONNECTION=mariadb
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=electrofix_ai
+DB_USERNAME=root
+DB_PASSWORD=your_password
+```
+
+## Post-Installation Steps
+
+### 1. Verify Installation
+
+Check that all migrations ran successfully:
+
+```bash
+php artisan migrate:status
+```
+
+Expected output should show all migrations as "Ran".
+
+### 2. Test Login
+
+Access the application and log in with demo credentials:
+
+- **Email:** `admin@electrofix.ai`
+- **Password:** `password123`
+
+You should see the admin dashboard with company information.
+
+### 3. Configure Application Settings
+
+Update `.env` with your specific settings:
+
+```bash .env
+# Application
+APP_NAME="Your Company Name"
+APP_URL=http://your-domain.com
+
+# Mail (for notifications)
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.mailtrap.io
+MAIL_PORT=2525
+MAIL_USERNAME=your_username
+MAIL_PASSWORD=your_password
+MAIL_FROM_ADDRESS="noreply@yourcompany.com"
+MAIL_FROM_NAME="${APP_NAME}"
+
+# Logging
+LOG_CHANNEL=stack
+LOG_LEVEL=info
+```
+
+### 4. Cache Configuration
+
+For better performance:
+
+```bash
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+
+<Warning>
+  Run `php artisan optimize:clear` whenever you modify `.env` or configuration files.
+</Warning>
+
+## Seeded Demo Data
+
+The `--seed` flag populates your database with:
+
+### Companies
+
+1. **ElectroFix Cliente Demo**
+   - Owner: Carlos Mendoza
+   - Email: owner@cliente-demo.com
+   - Plan: Pro (25 users, active)
+   - VAT: 16%
+   - Currency: MXN
+
+2. **ElectroFix Developer Lab**
+   - Owner: ElectroFix Platform Team
+   - Email: dev-owner@electrofix.ai
+   - Plan: Developer Test (999 users, active)
+   - VAT: 16%
+   - Currency: MXN
+
+### Users
+
+| Role      | Email                      | Password     | Company                   | Permissions                     |
+|-----------|----------------------------|--------------|---------------------------|---------------------------------|
+| Developer | developer@electrofix.ai    | password123  | Developer Lab             | Global access, all features     |
+| Admin     | admin@electrofix.ai        | password123  | Cliente Demo              | Billing, Inventory, Management  |
+| Worker    | worker@electrofix.ai       | password123  | Cliente Demo              | Inventory only                  |
+
+### Sample Data
+
+- **Customers:** 10-15 demo customers with contact information
+- **Equipment:** Various electronic devices linked to customers
+- **Orders:** Sample repair orders in different states
+- **Inventory:** 20-30 parts and products with stock levels
+- **Billing Documents:** Sample invoices and receipts
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Error: 'driver not found' or 'could not find driver'">
+    **Cause:** Missing PHP database extension.
+    
+    **Solution:**
+    
+    **For MySQL:**
+    ```bash
+    # Ubuntu/Debian
+    sudo apt install php8.2-mysql
+    sudo systemctl restart apache2
+    
+    # Enable in php.ini
+    extension=pdo_mysql
+    ```
+    
+    **For SQLite:**
+    ```bash
+    # Ubuntu/Debian
+    sudo apt install php8.2-sqlite3
+    
+    # Enable in php.ini
+    extension=pdo_sqlite
+    ```
+  </Accordion>
+  
+  <Accordion title="Error: 'Class 'DOMDocument' not found'">
+    **Cause:** Missing PHP XML extension (required for PDF generation).
+    
+    **Solution:**
+    ```bash
+    # Ubuntu/Debian
+    sudo apt install php8.2-xml
+    
+    # macOS
+    brew reinstall php@8.2
+    ```
+  </Accordion>
+  
+  <Accordion title="Error: 'file_put_contents(storage/framework/sessions): failed to open stream'">
+    **Cause:** Insufficient permissions on storage directories.
+    
+    **Solution:**
+    ```bash
+    # Linux/macOS
+    sudo chmod -R 775 storage bootstrap/cache
+    sudo chown -R $USER:www-data storage bootstrap/cache
+    
+    # Development (less secure but works)
+    chmod -R 777 storage bootstrap/cache
+    ```
+    
+    **Windows:**
+    - Right-click `storage` and `bootstrap/cache` folders
+    - Properties → Security → Edit
+    - Give "Full Control" to your user account
+  </Accordion>
+  
+  <Accordion title="Error: 'No application encryption key has been specified'">
+    **Cause:** Missing `APP_KEY` in `.env`.
+    
+    **Solution:**
+    ```bash
+    php artisan key:generate
+    ```
+    
+    Verify `.env` now contains:
+    ```
+    APP_KEY=base64:... (long random string)
+    ```
+  </Accordion>
+  
+  <Accordion title="Error: 'SQLSTATE[HY000] [2002] Connection refused'">
+    **Cause:** MySQL server not running or wrong connection settings.
+    
+    **Solution:**
+    
+    1. Check MySQL is running:
+    ```bash
+    # Linux
+    sudo systemctl status mysql
+    sudo systemctl start mysql
+    
+    # macOS
+    brew services list
+    brew services start mysql
+    
+    # XAMPP
+    # Use XAMPP Control Panel to start MySQL
+    ```
+    
+    2. Verify credentials:
+    ```bash
+    mysql -u root -p
+    ```
+    
+    3. Check `.env` settings match your MySQL configuration.
+  </Accordion>
+  
+  <Accordion title="Error: 'Specified key was too long' during migration">
+    **Cause:** Old MySQL version or wrong charset.
+    
+    **Solution:**
+    
+    Check MySQL version:
+    ```bash
+    mysql --version
+    ```
+    
+    If using MySQL 5.5-5.7, edit `app/Providers/AppServiceProvider.php`:
+    ```php
+    use Illuminate\Support\Facades\Schema;
+    
+    public function boot()
+    {
+        Schema::defaultStringLength(191);
+    }
+    ```
+    
+    Then re-run migrations:
+    ```bash
+    php artisan migrate:fresh --seed
+    ```
+  </Accordion>
+  
+  <Accordion title="Composer install fails with memory errors">
+    **Cause:** PHP memory limit too low.
+    
+    **Solution:**
+    ```bash
+    # Temporary increase
+    php -d memory_limit=-1 /usr/local/bin/composer install
+    
+    # Or edit php.ini
+    memory_limit = 512M
+    ```
+  </Accordion>
+  
+  <Accordion title="Page shows 'Whoops, looks like something went wrong' after login">
+    **Cause:** Various potential issues.
+    
+    **Solution:**
+    
+    1. Clear all caches:
+    ```bash
+    php artisan optimize:clear
+    ```
+    
+    2. Check storage permissions:
+    ```bash
+    chmod -R 775 storage bootstrap/cache
+    ```
+    
+    3. Enable debug mode in `.env`:
+    ```bash
+    APP_DEBUG=true
+    ```
+    
+    4. Check logs:
+    ```bash
+    tail -f storage/logs/laravel.log
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Production Deployment
+
+<Warning>
+  Production deployment requires additional security and optimization steps beyond this guide.
+</Warning>
+
+### Pre-Deployment Checklist
+
+- [ ] Set `APP_ENV=production` in `.env`
+- [ ] Set `APP_DEBUG=false` in `.env`
+- [ ] Use strong, unique `APP_KEY`
+- [ ] Configure proper `APP_URL`
+- [ ] Set up MySQL/PostgreSQL (not SQLite)
+- [ ] Configure mail settings (SMTP)
+- [ ] Set up HTTPS/SSL certificates
+- [ ] Configure file permissions (755 for directories, 644 for files)
+- [ ] Enable caching:
+  ```bash
+  php artisan config:cache
+  php artisan route:cache
+  php artisan view:cache
+  ```
+- [ ] Set up queue workers for background jobs
+- [ ] Configure backup strategy
+- [ ] Set up monitoring and logging
+
+### Recommended Production Stack
+
+- **Web Server:** Nginx with PHP-FPM
+- **Database:** MySQL 8.0+ or MariaDB 10.5+
+- **PHP:** 8.2+ with OPcache enabled
+- **Process Manager:** Supervisor (for queue workers)
+- **Cache:** Redis or Memcached
+- **CDN:** For static assets
+
+## Useful Commands Reference
+
+```bash
+# Development
+php artisan serve              # Start dev server
+php artisan optimize:clear     # Clear all caches
+php artisan migrate:fresh      # Reset database
+php artisan db:seed            # Run seeders only
+
+# Database
+php artisan migrate            # Run pending migrations
+php artisan migrate:status     # Check migration status
+php artisan migrate:rollback   # Rollback last batch
+
+# Cache
+php artisan config:cache       # Cache configuration
+php artisan route:cache        # Cache routes
+php artisan view:cache         # Cache views
+php artisan cache:clear        # Clear application cache
+
+# Testing
+php artisan test               # Run tests
+php artisan test --parallel    # Run tests in parallel
+
+# Debugging
+php artisan route:list         # List all routes
+php artisan tinker             # Interactive console
+tail -f storage/logs/laravel.log  # Watch logs
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+    Get up and running quickly with step-by-step instructions
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/deployment/configuration">
+    Customize ElectroFix AI for your business needs
+  </Card>
+  
+  <Card title="API Documentation" icon="code" href="/api/models/company">
+    Integrate with external systems and build custom features
+  </Card>
+  
+  <Card title="Worker Management" icon="users" href="/guides/admin/worker-management">
+    Learn how to manage users, roles, and permissions
+  </Card>
+</CardGroup>
+
+## Getting Help
+
+If you encounter issues not covered in this guide:
+
+1. Check the [Laravel 12 documentation](https://laravel.com/docs/12.x)
+2. Review application logs in `storage/logs/laravel.log`
+3. Enable debug mode and check browser console for errors
+4. Consult the project README for additional troubleshooting steps
+
+<Note>
+  Remember to disable debug mode (`APP_DEBUG=false`) in production environments!
+</Note>

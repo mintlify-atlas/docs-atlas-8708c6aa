@@ -1,0 +1,362 @@
+---
+title: Multi-Tenancy Architecture
+description: Learn how ElectroFix AI implements complete data isolation between companies
+---
+
+## Overview
+
+ElectroFix AI is built as a **multi-tenant SaaS application** where multiple companies (tenants) share the same application infrastructure while maintaining complete data isolation. Each company has its own isolated data scope, ensuring that users can only access and modify data belonging to their company.
+
+## Core Concepts
+
+### Company Isolation
+
+Every company in ElectroFix AI is a separate tenant with:
+
+- Unique company record with business details
+- Isolated users, customers, orders, and inventory
+- Separate subscription and AI usage tracking
+- Independent billing and financial data
+
+### The `company_id` Foreign Key
+
+The foundation of multi-tenancy is the `company_id` foreign key present in nearly every database table:
+
+```php
+// Migration example from create_companies_table.php
+Schema::create('companies', function (Blueprint $table): void {
+    $table->id();
+    $table->string('name');
+    $table->string('owner_name');
+    $table->string('owner_email');
+    $table->timestamps();
+});
+
+// Users table links to companies
+Schema::table('users', function (Blueprint $table): void {
+    $table->foreignId('company_id')
+          ->nullable()
+          ->after('email')
+          ->constrained()
+          ->nullOnDelete();
+});
+```
+
+### Company Relationships
+
+The `Company` model defines relationships to all tenant-scoped resources:
+
+```php
+// app/Models/Company.php
+class Company extends Model
+{
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class);
+    }
+
+    public function subscription(): HasOne
+    {
+        return $this->hasOne(Subscription::class);
+    }
+
+    public function customers(): HasMany
+    {
+        return $this->hasMany(Customer::class);
+    }
+
+    public function equipments(): HasMany
+    {
+        return $this->hasMany(Equipment::class);
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    public function inventoryItems(): HasMany
+    {
+        return $this->hasMany(InventoryItem::class);
+    }
+
+    public function billingDocuments(): HasMany
+    {
+        return $this->hasMany(BillingDocument::class);
+    }
+
+    public function aiUsages(): HasMany
+    {
+        return $this->hasMany(CompanyAiUsage::class);
+    }
+}
+```
+
+## Data Scoping in Practice
+
+### Controller-Level Scoping
+
+Every controller enforces company-level data isolation. Here's an example from the `OrderController`:
+
+```php
+// app/Http/Controllers/Worker/OrderController.php:22-45
+public function index(Request $request)
+{
+    $user = $request->user();
+    $orders = Order::query()
+        ->with(['customer', 'equipment'])
+        ->orderByDesc('created_at');
+
+    $customers = Customer::query()->orderBy('name');
+    $equipments = Equipment::query()->orderByDesc('created_at');
+
+    // Non-developer users are scoped to their company
+    if ($user->role !== 'developer') {
+        $companyId = $user->company_id;
+        $orders->where('company_id', $companyId);
+        $customers->where('company_id', $companyId);
+        $equipments->where('company_id', $companyId);
+    }
+
+    return view('worker.orders.index', [
+        'orders' => $orders->paginate(18),
+        'customers' => $customers->get(),
+        'equipments' => $equipments->get(),
+    ]);
+}
+```
+
+### Service-Level Validation
+
+The `OrderCreationService` validates that related entities belong to the same company:
+
+```php
+// app/Services/OrderCreationService.php:23-44
+public function create(User $actor, array $payload): array
+{
+    $customer = Customer::query()->findOrFail((int) $payload['customer_id']);
+    $equipment = Equipment::query()->findOrFail((int) $payload['equipment_id']);
+
+    // Ensure customer and equipment belong to the same company
+    if ($customer->company_id !== $equipment->company_id) {
+        abort(422, 'Cliente y equipo no pertenecen a la misma empresa.');
+    }
+
+    // Prevent cross-company data access
+    if ($actor->role !== 'developer' && $customer->company_id !== $actor->company_id) {
+        abort(403, 'No puedes crear órdenes fuera de tu empresa.');
+    }
+
+    $order = Order::query()->create([
+        'company_id' => $customer->company_id,
+        'customer_id' => $customer->id,
+        'equipment_id' => $equipment->id,
+        // ... other fields
+    ]);
+
+    return ['order' => $order];
+}
+```
+
+### Model-Level Scopes
+
+The `User` model includes a query scope for company filtering:
+
+```php
+// app/Models/User.php:98-101
+public function scopeForCompany(Builder $query, ?int $companyId): Builder
+{
+    return $query->where('company_id', $companyId);
+}
+
+// Usage example
+$companyUsers = User::forCompany($companyId)->get();
+```
+
+## Multi-Tenant Data Models
+
+### Customer Model
+
+```php
+// app/Models/Customer.php
+class Customer extends Model
+{
+    protected $fillable = [
+        'company_id',  // Tenant isolation
+        'name',
+        'email',
+        'phone',
+        'address',
+    ];
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+}
+```
+
+### Equipment Model
+
+```php
+// app/Models/Equipment.php
+class Equipment extends Model
+{
+    protected $fillable = [
+        'company_id',    // Tenant isolation
+        'customer_id',
+        'type',
+        'brand',
+        'model',
+        'serial_number',
+    ];
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+}
+```
+
+### Inventory Item Model
+
+```php
+// app/Models/InventoryItem.php
+class InventoryItem extends Model
+{
+    protected $fillable = [
+        'company_id',           // Tenant isolation
+        'name',
+        'internal_code',
+        'quantity',
+        'low_stock_threshold',
+        'is_sale_enabled',
+        'sale_price',
+    ];
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+}
+```
+
+## Security Considerations
+
+### 1. Always Validate Company Ownership
+
+Before performing any operation, verify that the authenticated user has access to the resource:
+
+```php
+private function authorizeOrder(Request $request, Order $order): void
+{
+    if ($request->user()->role !== 'developer' 
+        && $order->company_id !== $request->user()->company_id) {
+        abort(403, 'No puedes modificar esta orden.');
+    }
+}
+```
+
+### 2. Use Database Constraints
+
+Foreign key constraints ensure referential integrity:
+
+```php
+$table->foreignId('company_id')
+      ->constrained()
+      ->cascadeOnDelete();  // or nullOnDelete()
+```
+
+### 3. Never Trust Client Input
+
+Always derive `company_id` from the authenticated user, never from request data:
+
+```php
+// ✅ CORRECT
+'company_id' => $request->user()->company_id,
+
+// ❌ WRONG - Security vulnerability!
+'company_id' => $request->input('company_id'),
+```
+
+### 4. Developer Role Exception
+
+The `developer` role has cross-company access for administrative purposes:
+
+```php
+if ($user->role !== 'developer') {
+    // Apply company scoping
+    $query->where('company_id', $user->company_id);
+}
+```
+
+## Database Indexes
+
+For optimal performance, compound indexes are created on `company_id`:
+
+```php
+// From alter_users_for_multi_tenant_and_permissions.php
+$table->index(['company_id', 'role', 'is_active']);
+
+// From create_company_ai_usages_table.php
+$table->index(['company_id', 'year_month']);
+$table->index(['company_id', 'status']);
+```
+
+## Common Patterns
+
+### Pattern 1: Controller Queries
+
+```php
+public function index(Request $request)
+{
+    $user = $request->user();
+    $items = InventoryItem::query()
+        ->where('company_id', $user->company_id)
+        ->orderBy('name')
+        ->paginate(20);
+
+    return view('worker.inventory.index', compact('items'));
+}
+```
+
+### Pattern 2: Creating Records
+
+```php
+public function store(Request $request)
+{
+    $customer = Customer::create([
+        'company_id' => $request->user()->company_id,
+        'name' => $request->input('name'),
+        // ... other fields
+    ]);
+
+    return redirect()->back()->with('success', 'Customer created');
+}
+```
+
+### Pattern 3: Cross-Model Validation
+
+```php
+// Ensure equipment belongs to user's company before creating order
+$equipment = Equipment::query()->findOrFail($equipmentId);
+
+if ($equipment->company_id !== $request->user()->company_id) {
+    abort(403, 'No puedes usar equipos de otra empresa.');
+}
+```
+
+## Best Practices
+
+1. **Always scope by company_id** in queries for non-developer users
+2. **Use model relationships** to navigate between tenant-scoped resources
+3. **Validate cross-model relationships** to prevent data leakage
+4. **Add database indexes** on `company_id` for performance
+5. **Test isolation thoroughly** to ensure no cross-tenant data access
+6. **Use consistent authorization patterns** across all controllers
+
+## Related Topics
+
+- [Roles & Permissions](/concepts/roles-permissions) - User access control
+- [Subscription Plans](/concepts/subscription-plans) - Company-level subscriptions
+- [AI Diagnostics](/concepts/ai-diagnostics) - Company AI usage tracking

@@ -1,0 +1,254 @@
+---
+title: 'Company Model'
+description: 'API reference for the Company model in ElectroFix'
+---
+
+## Overview
+
+The Company model represents a business entity in ElectroFix. Each company has its own users, customers, equipment, orders, inventory, and billing documents. This is the top-level organizational model in the system.
+
+## Properties
+
+### Fillable Attributes
+
+<ParamField path="name" type="string" required>
+  The company's business name
+</ParamField>
+
+<ParamField path="owner_name" type="string">
+  Full name of the company owner
+</ParamField>
+
+<ParamField path="owner_email" type="string">
+  Email address of the company owner
+</ParamField>
+
+<ParamField path="owner_phone" type="string">
+  Phone number of the company owner
+</ParamField>
+
+<ParamField path="tax_id" type="string">
+  Tax identification number for the company
+</ParamField>
+
+<ParamField path="billing_email" type="string">
+  Email address for billing communications
+</ParamField>
+
+<ParamField path="billing_phone" type="string">
+  Phone number for billing inquiries
+</ParamField>
+
+<ParamField path="address_line" type="string">
+  Street address of the company
+</ParamField>
+
+<ParamField path="city" type="string">
+  City where the company is located
+</ParamField>
+
+<ParamField path="state" type="string">
+  State or province of the company
+</ParamField>
+
+<ParamField path="country" type="string">
+  Country where the company operates
+</ParamField>
+
+<ParamField path="postal_code" type="string">
+  Postal or ZIP code
+</ParamField>
+
+<ParamField path="currency" type="string">
+  Currency code used by the company (e.g., USD, EUR)
+</ParamField>
+
+<ParamField path="vat_percentage" type="decimal">
+  Default VAT/tax percentage for billing (stored with 2 decimal precision)
+</ParamField>
+
+<ParamField path="notes" type="text">
+  Additional notes or information about the company
+</ParamField>
+
+## Casts
+
+```php
+protected function casts(): array
+{
+    return [
+        'vat_percentage' => 'decimal:2',
+    ];
+}
+```
+
+The `vat_percentage` field is automatically cast to a decimal with 2 decimal places.
+
+## Relationships
+
+### users()
+
+**Type:** `HasMany`
+
+Returns all users belonging to this company.
+
+```php
+public function users(): HasMany
+{
+    return $this->hasMany(User::class);
+}
+```
+
+### subscription()
+
+**Type:** `HasOne`
+
+Returns the active subscription for this company.
+
+```php
+public function subscription(): HasOne
+{
+    return $this->hasOne(Subscription::class);
+}
+```
+
+### customers()
+
+**Type:** `HasMany`
+
+Returns all customers belonging to this company.
+
+```php
+public function customers(): HasMany
+{
+    return $this->hasMany(Customer::class);
+}
+```
+
+### equipments()
+
+**Type:** `HasMany`
+
+Returns all equipment registered to this company.
+
+```php
+public function equipments(): HasMany
+{
+    return $this->hasMany(Equipment::class);
+}
+```
+
+### orders()
+
+**Type:** `HasMany`
+
+Returns all repair orders for this company.
+
+```php
+public function orders(): HasMany
+{
+    return $this->hasMany(Order::class);
+}
+```
+
+### inventoryItems()
+
+**Type:** `HasMany`
+
+Returns all inventory items managed by this company.
+
+```php
+public function inventoryItems(): HasMany
+{
+    return $this->hasMany(InventoryItem::class);
+}
+```
+
+### inventoryMovements()
+
+**Type:** `HasMany`
+
+Returns all inventory movements tracked for this company.
+
+```php
+public function inventoryMovements(): HasMany
+{
+    return $this->hasMany(InventoryMovement::class);
+}
+```
+
+### billingDocuments()
+
+**Type:** `HasMany`
+
+Returns all billing documents (invoices, quotes, etc.) for this company.
+
+```php
+public function billingDocuments(): HasMany
+{
+    return $this->hasMany(BillingDocument::class);
+}
+```
+
+### aiUsages()
+
+**Type:** `HasMany`
+
+Returns all AI usage records for this company.
+
+```php
+public function aiUsages(): HasMany
+{
+    return $this->hasMany(CompanyAiUsage::class);
+}
+```
+
+## Usage Examples
+
+### Creating a New Company
+
+```php
+$company = Company::create([
+    'name' => 'Tech Repairs Inc.',
+    'owner_name' => 'John Doe',
+    'owner_email' => 'john@techrepairs.com',
+    'owner_phone' => '+1234567890',
+    'tax_id' => '12-3456789',
+    'address_line' => '123 Main Street',
+    'city' => 'San Francisco',
+    'state' => 'CA',
+    'country' => 'USA',
+    'postal_code' => '94102',
+    'currency' => 'USD',
+    'vat_percentage' => 8.50,
+]);
+```
+
+### Accessing Company Relationships
+
+```php
+// Get all users for a company
+$users = $company->users;
+
+// Get company subscription
+$subscription = $company->subscription;
+
+// Get all customers
+$customers = $company->customers;
+
+// Get all orders with equipment details
+$orders = $company->orders()->with('equipment')->get();
+```
+
+### Updating Company Information
+
+```php
+$company->update([
+    'vat_percentage' => 9.00,
+    'billing_email' => 'billing@techrepairs.com',
+]);
+```
+
+## Source Reference
+
+Model file: `/home/daytona/workspace/source/app/Models/Company.php`

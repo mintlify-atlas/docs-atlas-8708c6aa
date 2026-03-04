@@ -1,80 +1,353 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: 'Quickstart'
+description: 'Get ElectroFix AI up and running in 5 minutes'
 ---
 
-## Get started in three steps
+## Overview
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This guide will help you set up ElectroFix AI locally and get your first multi-tenant repair shop management system running quickly.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  ElectroFix AI is a Laravel 12-based SaaS platform for electronics repair shop management with multi-tenancy, AI diagnostics, inventory tracking, and billing capabilities.
+</Note>
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- **PHP 8.2 or higher** with required extensions (PDO, mbstring, OpenSSL, JSON, cURL)
+- **Composer** (PHP dependency manager)
+- **MySQL 5.7+** or **MariaDB 10.3+** (or SQLite for quick testing)
+- **Git** for cloning the repository
+
+## Quick Setup
+
+<Steps>
+  <Step title="Clone the Repository">
+    Clone the ElectroFix AI repository to your local machine:
+    
+    ```bash
+    git clone <your-repository-url>
+    cd ElectroFix-AI
+    ```
+  </Step>
+
+  <Step title="Install PHP Dependencies">
+    Install all required PHP packages using Composer:
+    
+    ```bash
+    composer install
+    ```
+    
+    This will install:
+    - Laravel 12 framework
+    - Laravel Tinker
+    - DomPDF for invoice generation
+    - All development dependencies
+  </Step>
+
+  <Step title="Configure Environment">
+    Create your environment configuration file:
+    
+    ```bash
+    cp .env.example .env
+    php artisan key:generate
+    ```
+    
+    <Accordion title="Quick Database Setup (SQLite)">
+      For the fastest setup, use SQLite (default configuration):
+      
+      ```bash .env
+      DB_CONNECTION=sqlite
+      ```
+      
+      Create the database file:
+      ```bash
+      touch database/database.sqlite
+      ```
+    </Accordion>
+    
+    <Accordion title="Production Setup (MySQL)">
+      For production-like setup with MySQL:
+      
+      1. Create a MySQL database:
+      ```sql
+      CREATE DATABASE electrofix_ai CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      ```
+      
+      2. Update your `.env` file:
+      ```bash .env
+      DB_CONNECTION=mysql
+      DB_HOST=127.0.0.1
+      DB_PORT=3306
+      DB_DATABASE=electrofix_ai
+      DB_USERNAME=root
+      DB_PASSWORD=your_password
+      ```
+    </Accordion>
+  </Step>
+
+  <Step title="Run Migrations and Seeders">
+    Set up the database schema and populate it with demo data:
+    
+    ```bash
+    php artisan migrate:fresh --seed
+    ```
+    
+    This command will:
+    - Create all database tables (companies, users, orders, inventory, billing, etc.)
+    - Seed two demo companies:
+      - **ElectroFix Cliente Demo** (regular company)
+      - **ElectroFix Developer Lab** (developer test company)
+    - Create three demo users with different roles
+    - Generate sample operational data (customers, equipments, orders)
+    - Create inventory items and billing documents
+    
+    <Warning>
+      The `--seed` flag is important! It creates demo users and companies that you'll need to log in.
+    </Warning>
+  </Step>
+
+  <Step title="Start the Development Server">
+    Launch the Laravel development server:
+    
+    ```bash
+    php artisan serve
+    ```
+    
+    You should see output similar to:
+    ```
+    INFO  Server running on [http://127.0.0.1:8000].
+    
+    Press Ctrl+C to stop the server
+    ```
+  </Step>
+
+  <Step title="Access the Application">
+    Open your browser and navigate to:
+    
+    ```
+    http://127.0.0.1:8000
+    ```
+    
+    You'll see the ElectroFix AI landing page with a login option.
+  </Step>
+</Steps>
+
+## Demo Credentials
+
+The seeder creates three demo users with different permission levels:
+
+<CodeGroup>
+```bash Developer Account
+Email: developer@electrofix.ai
+Password: password123
+Role: Developer (global access)
+Company: ElectroFix Developer Lab
+```
+
+```bash Admin Account
+Email: admin@electrofix.ai
+Password: password123
+Role: Admin
+Company: ElectroFix Cliente Demo
+```
+
+```bash Worker Account
+Email: worker@electrofix.ai
+Password: password123
+Role: Worker
+Company: ElectroFix Cliente Demo
+```
+</CodeGroup>
+
+<Note>
+  All demo accounts use the password `password123`. Change these in production!
+</Note>
+
+## What You'll See
+
+### After Login
+
+Depending on the role you log in with, you'll be redirected to different dashboards:
+
+**Developer Dashboard** (`developer@electrofix.ai`)
+- Global system overview
+- All companies management
+- Subscription insights
+- System-wide AI usage tracking
+
+**Admin Dashboard** (`admin@electrofix.ai`)
+- Company profile management
+- Worker/user management
+- Subscription plan details
+- Company-wide statistics
+
+**Worker Dashboard** (`worker@electrofix.ai`)
+- Assigned repair orders
+- Customer management
+- Equipment tracking
+- Inventory access (if permitted)
+- Billing/POS access (if permitted)
+
+## Key Features to Explore
+
+<CardGroup cols={2}>
+  <Card title="Repair Orders" icon="wrench">
+    Create and track repair orders with:
+    - Customer and equipment linking
+    - Status tracking (Pending → In Progress → Completed/Cancelled)
+    - AI-powered diagnostics (for Enterprise plans)
+    - Technician assignment
+  </Card>
+  
+  <Card title="Inventory Management" icon="boxes">
+    Manage repair parts and products:
+    - Stock tracking with movement history
+    - Low stock alerts
+    - Product categories
+    - Cost and sale price management
+  </Card>
+  
+  <Card title="Billing & POS" icon="receipt">
+    Generate invoices and receipts:
+    - Sale, Service, and Mixed document types
+    - PDF generation with company branding
+    - VAT/IVA calculation
+    - Link to repair orders
+  </Card>
+  
+  <Card title="Multi-Tenancy" icon="building">
+    Complete tenant isolation:
+    - Company-specific data
+    - Subscription-based feature access
+    - Role-based permissions
+    - AI usage limits per company
+  </Card>
+</CardGroup>
+
+## Testing AI Diagnostics
+
+The AI diagnostic feature is available for Enterprise and Developer Test plans:
+
+<Steps>
+  <Step title="Log in as Admin or Developer">
+    Worker accounts don't have AI access by default.
+  </Step>
+  
+  <Step title="Create a New Repair Order">
+    Navigate to **Worker Dashboard** → **Orders** → **New Order**
+  </Step>
+  
+  <Step title="Enable AI Diagnosis">
+    - Select a customer and equipment
+    - Enter symptoms (max 600 characters)
+    - Check the "Request AI Diagnosis" checkbox
+    - Submit the order
+  </Step>
+  
+  <Step title="View AI Results">
+    The AI will provide:
+    - Probable diagnosis
+    - Suggested repair steps
+    - Estimated cost (parts + labor)
+    - Replacement vs. repair recommendation
+  </Step>
+</Steps>
+
+<Note>
+  AI diagnostics use a local stub implementation. In production, this connects to your AI provider (OpenAI, Anthropic, etc.).
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Detailed setup for XAMPP, production environments, and troubleshooting
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/models/company">
+    Complete API documentation for integrations
+  </Card>
+  
+  <Card title="User Roles" icon="users" href="/concepts/roles-permissions">
+    Understanding permissions and access control
+  </Card>
+  
+  <Card title="Multi-Tenancy" icon="building" href="/concepts/multi-tenancy">
+    How company isolation and data separation works
+  </Card>
+</CardGroup>
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="500 Error After Installation">
+    **Solution:** Clear Laravel caches and regenerate the application key:
+    
+    ```bash
+    php artisan optimize:clear
+    php artisan key:generate
+    php artisan config:cache
+    ```
+  </Accordion>
+  
+  <Accordion title="Database Connection Failed">
+    **For SQLite:**
+    - Ensure `database/database.sqlite` exists
+    - Check file permissions (must be writable)
+    
+    **For MySQL:**
+    - Verify MySQL service is running
+    - Confirm database exists and credentials are correct
+    - Test connection: `mysql -u root -p`
+  </Accordion>
+  
+  <Accordion title="Composer Install Fails">
+    **Solution:** Ensure PHP version is 8.2 or higher:
+    
+    ```bash
+    php -v
+    ```
+    
+    Update PHP or install missing extensions:
+    ```bash
+    # Ubuntu/Debian
+    sudo apt-get install php8.2-mysql php8.2-mbstring php8.2-xml php8.2-curl
+    ```
+  </Accordion>
+  
+  <Accordion title="Migration Errors">
+    **Solution:** Drop all tables and re-run migrations:
+    
+    ```bash
+    php artisan migrate:fresh --seed
+    ```
+    
+    <Warning>
+      This will delete ALL data in your database!
+    </Warning>
+  </Accordion>
+</AccordionGroup>
+
+## Development Workflow
+
+For ongoing development:
+
+```bash
+# Clear all caches
+php artisan optimize:clear
+
+# Run tests
+php artisan test
+
+# Check routes
+php artisan route:list
+
+# Start development server
+php artisan serve
+```
+
+<Note>
+  The application uses Laravel 12 with Blade templates, Bootstrap 5, and vanilla JavaScript. No frontend build step required!
 </Note>

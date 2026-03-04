@@ -1,0 +1,426 @@
+---
+title: 'Billing Document Model'
+description: 'API reference for the BillingDocument model in ElectroFix'
+---
+
+## Overview
+
+The BillingDocument model represents invoices, quotes, and other billing documents in ElectroFix. It supports both registered customers and walk-in customers, includes tax calculations, and maintains a complete billing history.
+
+## Properties
+
+### Fillable Attributes
+
+<ParamField path="company_id" type="integer" required>
+  Foreign key to the Company that owns this document
+</ParamField>
+
+<ParamField path="user_id" type="integer" required>
+  Foreign key to the User who created this document
+</ParamField>
+
+<ParamField path="customer_id" type="integer">
+  Foreign key to the Customer (null for walk-in customers)
+</ParamField>
+
+<ParamField path="document_number" type="string" required>
+  Unique document number (e.g., 'INV-2024-001')
+</ParamField>
+
+<ParamField path="document_type" type="string" required>
+  Type of document (e.g., 'invoice', 'quote', 'receipt')
+</ParamField>
+
+<ParamField path="customer_mode" type="string" required>
+  Customer type: 'registered' or 'walk_in'
+</ParamField>
+
+<ParamField path="walk_in_name" type="string">
+  Name for walk-in customers (when customer_mode is 'walk_in')
+</ParamField>
+
+<ParamField path="source" type="string">
+  Source of the billing (e.g., 'order', 'direct_sale')
+</ParamField>
+
+<ParamField path="tax_mode" type="string">
+  Tax calculation mode (e.g., 'inclusive', 'exclusive')
+</ParamField>
+
+<ParamField path="vat_percentage" type="decimal">
+  VAT/tax percentage applied to this document
+</ParamField>
+
+<ParamField path="subtotal" type="decimal" required>
+  Subtotal amount before tax
+</ParamField>
+
+<ParamField path="vat_amount" type="decimal">
+  Calculated VAT/tax amount
+</ParamField>
+
+<ParamField path="total" type="decimal" required>
+  Total amount including tax
+</ParamField>
+
+<ParamField path="notes" type="text">
+  Additional notes or comments for this document
+</ParamField>
+
+<ParamField path="issued_at" type="datetime" required>
+  Date and time when the document was issued
+</ParamField>
+
+## Casts
+
+```php
+protected function casts(): array
+{
+    return [
+        'vat_percentage' => 'decimal:2',
+        'subtotal' => 'decimal:2',
+        'vat_amount' => 'decimal:2',
+        'total' => 'decimal:2',
+        'issued_at' => 'datetime',
+    ];
+}
+```
+
+- All monetary fields are cast to decimals with 2 decimal precision
+- `issued_at` is cast to Carbon datetime instance
+
+## Relationships
+
+### company()
+
+**Type:** `BelongsTo`
+
+Returns the company that owns this document.
+
+```php
+public function company(): BelongsTo
+{
+    return $this->belongsTo(Company::class);
+}
+```
+
+### user()
+
+**Type:** `BelongsTo`
+
+Returns the user who created this document.
+
+```php
+public function user(): BelongsTo
+{
+    return $this->belongsTo(User::class);
+}
+```
+
+### customer()
+
+**Type:** `BelongsTo`
+
+Returns the customer (null for walk-in customers).
+
+```php
+public function customer(): BelongsTo
+{
+    return $this->belongsTo(Customer::class);
+}
+```
+
+### items()
+
+**Type:** `HasMany`
+
+Returns all line items in this billing document.
+
+```php
+public function items(): HasMany
+{
+    return $this->hasMany(BillingDocumentItem::class);
+}
+```
+
+## Methods
+
+### customerDisplayName()
+
+Get the customer name for display, handling both registered and walk-in customers.
+
+```php
+public function customerDisplayName(): string
+{
+    if ($this->customer_mode === 'walk_in') {
+        return $this->walk_in_name ?: 'Cliente de Mostrador';
+    }
+
+    return $this->customer?->name ?: 'Cliente no disponible';
+}
+```
+
+**Returns:** `string` - Customer name or default text
+
+**Behavior:**
+- For walk-in customers: Returns `walk_in_name` or 'Cliente de Mostrador' if empty
+- For registered customers: Returns customer name or 'Cliente no disponible' if not found
+
+## Usage Examples
+
+### Creating Invoice for Registered Customer
+
+```php
+$invoice = BillingDocument::create([
+    'company_id' => 1,
+    'user_id' => auth()->id(),
+    'customer_id' => 5,
+    'document_number' => 'INV-2024-001',
+    'document_type' => 'invoice',
+    'customer_mode' => 'registered',
+    'source' => 'order',
+    'tax_mode' => 'exclusive',
+    'vat_percentage' => 8.50,
+    'subtotal' => 250.00,
+    'vat_amount' => 21.25,
+    'total' => 271.25,
+    'notes' => 'Repair of MacBook Pro - screen replacement',
+    'issued_at' => now(),
+]);
+```
+
+### Creating Invoice for Walk-in Customer
+
+```php
+$invoice = BillingDocument::create([
+    'company_id' => 1,
+    'user_id' => auth()->id(),
+    'customer_id' => null,
+    'document_number' => 'INV-2024-002',
+    'document_type' => 'invoice',
+    'customer_mode' => 'walk_in',
+    'walk_in_name' => 'John Smith',
+    'source' => 'direct_sale',
+    'tax_mode' => 'inclusive',
+    'vat_percentage' => 10.00,
+    'subtotal' => 90.91,
+    'vat_amount' => 9.09,
+    'total' => 100.00,
+    'issued_at' => now(),
+]);
+```
+
+### Adding Line Items
+
+```php
+// Add items to invoice
+$invoice->items()->create([
+    'inventory_item_id' => 12,
+    'description' => 'LCD Screen Replacement',
+    'quantity' => 1,
+    'price' => 150.00,
+    'total' => 150.00,
+]);
+
+$invoice->items()->create([
+    'description' => 'Labor - Screen Installation',
+    'quantity' => 1,
+    'price' => 100.00,
+    'total' => 100.00,
+]);
+```
+
+### Querying Billing Documents
+
+```php
+// Get all invoices for a company
+$invoices = BillingDocument::where('company_id', $companyId)
+    ->where('document_type', 'invoice')
+    ->orderBy('issued_at', 'desc')
+    ->get();
+
+// Get documents for a specific customer
+$customerDocuments = BillingDocument::where('company_id', $companyId)
+    ->where('customer_id', $customerId)
+    ->with(['items', 'user'])
+    ->get();
+
+// Get walk-in sales
+$walkInSales = BillingDocument::where('company_id', $companyId)
+    ->where('customer_mode', 'walk_in')
+    ->whereBetween('issued_at', [$startDate, $endDate])
+    ->get();
+```
+
+### Display Customer Name
+
+```php
+// Use the helper method for display
+echo "Invoice for: " . $invoice->customerDisplayName();
+
+// For walk-in: "Invoice for: John Smith"
+// For registered: "Invoice for: Jane Doe"
+```
+
+### Financial Reports
+
+```php
+// Calculate total revenue for period
+$revenue = BillingDocument::where('company_id', $companyId)
+    ->where('document_type', 'invoice')
+    ->whereBetween('issued_at', [$startDate, $endDate])
+    ->sum('total');
+
+// Get tax collected
+$taxCollected = BillingDocument::where('company_id', $companyId)
+    ->whereBetween('issued_at', [$startDate, $endDate])
+    ->sum('vat_amount');
+
+// Revenue by document type
+$revenueByType = BillingDocument::where('company_id', $companyId)
+    ->select('document_type', DB::raw('SUM(total) as revenue'))
+    ->groupBy('document_type')
+    ->get();
+```
+
+### Document with Full Details
+
+```php
+// Get document with all related data
+$document = BillingDocument::with([
+    'company',
+    'user',
+    'customer',
+    'items.inventoryItem'
+])->find($documentId);
+
+// Display full document
+echo "Document #: {$document->document_number}\n";
+echo "Type: {$document->document_type}\n";
+echo "Customer: {$document->customerDisplayName()}\n";
+echo "Created by: {$document->user->name}\n";
+echo "Date: {$document->issued_at->format('Y-m-d')}\n";
+echo "\nItems:\n";
+foreach ($document->items as $item) {
+    echo "- {$item->description}: {$item->quantity} x {$item->price}\n";
+}
+echo "\nSubtotal: {$document->subtotal}\n";
+echo "VAT ({$document->vat_percentage}%): {$document->vat_amount}\n";
+echo "Total: {$document->total}\n";
+```
+
+### Updating Document
+
+```php
+// Update notes or status
+$document->update([
+    'notes' => 'Customer requested expedited service',
+]);
+```
+
+### Filtering by Date Range
+
+```php
+// Get this month's documents
+$thisMonth = BillingDocument::where('company_id', $companyId)
+    ->whereYear('issued_at', now()->year)
+    ->whereMonth('issued_at', now()->month)
+    ->with('customer')
+    ->get();
+
+// Get today's sales
+$todaySales = BillingDocument::where('company_id', $companyId)
+    ->whereDate('issued_at', today())
+    ->sum('total');
+```
+
+### Document Number Generation
+
+```php
+// Generate sequential document number
+$lastDocument = BillingDocument::where('company_id', $companyId)
+    ->where('document_type', 'invoice')
+    ->orderBy('created_at', 'desc')
+    ->first();
+
+if ($lastDocument) {
+    // Extract number and increment
+    preg_match('/\d+$/', $lastDocument->document_number, $matches);
+    $nextNumber = str_pad((int)$matches[0] + 1, 3, '0', STR_PAD_LEFT);
+} else {
+    $nextNumber = '001';
+}
+
+$documentNumber = "INV-" . date('Y') . "-" . $nextNumber;
+```
+
+### Sales by User
+
+```php
+// Get top selling users
+$topSellers = BillingDocument::where('company_id', $companyId)
+    ->whereBetween('issued_at', [$startDate, $endDate])
+    ->select('user_id', DB::raw('COUNT(*) as document_count'), DB::raw('SUM(total) as total_sales'))
+    ->groupBy('user_id')
+    ->with('user')
+    ->orderBy('total_sales', 'desc')
+    ->get();
+```
+
+### Customer Purchase History
+
+```php
+// Get all purchases for a customer
+$purchaseHistory = BillingDocument::where('company_id', $companyId)
+    ->where('customer_id', $customerId)
+    ->with('items')
+    ->orderBy('issued_at', 'desc')
+    ->get();
+
+$totalSpent = $purchaseHistory->sum('total');
+$totalDocuments = $purchaseHistory->count();
+$averageOrder = $totalSpent / $totalDocuments;
+```
+
+## Common Patterns
+
+### Complete Invoice Creation
+
+```php
+// Calculate totals
+$subtotal = 250.00;
+$vatPercentage = 8.50;
+$vatAmount = ($subtotal * $vatPercentage) / 100;
+$total = $subtotal + $vatAmount;
+
+// Create document
+$invoice = BillingDocument::create([
+    'company_id' => $companyId,
+    'user_id' => auth()->id(),
+    'customer_id' => $customerId,
+    'document_number' => $documentNumber,
+    'document_type' => 'invoice',
+    'customer_mode' => 'registered',
+    'source' => 'order',
+    'tax_mode' => 'exclusive',
+    'vat_percentage' => $vatPercentage,
+    'subtotal' => $subtotal,
+    'vat_amount' => $vatAmount,
+    'total' => $total,
+    'issued_at' => now(),
+]);
+
+// Add items
+foreach ($orderItems as $item) {
+    $invoice->items()->create([
+        'description' => $item['description'],
+        'quantity' => $item['quantity'],
+        'price' => $item['price'],
+        'total' => $item['quantity'] * $item['price'],
+    ]);
+}
+```
+
+## Source Reference
+
+Model file: `/home/daytona/workspace/source/app/Models/BillingDocument.php`

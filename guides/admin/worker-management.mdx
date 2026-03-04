@@ -1,0 +1,513 @@
+---
+title: Worker Management
+description: Add, configure, and manage worker accounts with module permissions
+---
+
+## Overview
+
+Worker Management allows administrators to create and manage employee accounts within their company. Control access to specialized modules (Billing and Inventory) and manage worker status, credentials, and permissions.
+
+<Warning>
+  Only users with the **admin** role can access Worker Management. Workers cannot view or manage other worker accounts.
+</Warning>
+
+### What You Can Do
+
+- Create new worker accounts
+- Grant or revoke Billing module access
+- Grant or revoke Inventory module access
+- Activate or deactivate worker accounts
+- Update worker names, emails, and passwords
+- Permanently delete worker accounts
+
+## Accessing Worker Management
+
+Navigate to **Admin** → **Trabajadores** (Workers) from the main menu. The worker management page displays:
+
+- Form to create new workers
+- Table of all registered workers
+- Inline editing for each worker
+- Status toggles and delete actions
+
+## Understanding Worker Roles
+
+### Admin Role
+
+Admins have full system access:
+- All operational modules (Orders, Customers, Equipment)
+- Billing module (always enabled)
+- Inventory module (always enabled)
+- Admin-only features (Company Settings, Subscription, Worker Management)
+- Cannot be created through Worker Management (only via company setup)
+
+### Worker Role
+
+Workers have conditional access:
+- **Always Available**: Orders, Customers, Equipment modules
+- **Permission Required**: Billing and Inventory modules
+- **Never Available**: Admin features (Company Settings, Subscription, Worker Management)
+- Created through Worker Management by admins
+
+## Creating a New Worker
+
+<Steps>
+  <Step title="Navigate to Worker Management">
+    Go to **Admin** → **Trabajadores** from the main menu.
+  </Step>
+
+  <Step title="Fill in Worker Information">
+    In the "Nuevo trabajador" (New Worker) section, enter:
+    
+    **Nombre (Name)**
+    - Required field
+    - Maximum 255 characters
+    - Full name of the employee
+    - **Example**: "María Guadalupe Fernández"
+    
+    **Correo (Email)**
+    - Required field
+    - Must be valid email format
+    - Maximum 255 characters
+    - Must be unique across entire system
+    - Used for login
+    - **Example**: "maria.fernandez@company.com"
+    
+    **Contraseña (Password)**
+    - Required field
+    - Minimum 8 characters
+    - Worker can change after first login
+    - **Example**: "SecurePass123"
+  </Step>
+
+  <Step title="Set Module Permissions">
+    Check the appropriate permission boxes:
+    
+    **Permitir Facturación** (Allow Billing)
+    - Grants access to Billing/POS module
+    - Worker can create quotes and invoices
+    - Worker can generate PDFs
+    - Worker can view billing history
+    
+    **Permitir Inventario** (Allow Inventory)
+    - Grants access to Inventory module
+    - Worker can create inventory items
+    - Worker can adjust stock levels
+    - Worker receives low-stock notifications
+    - Worker can delete inventory items
+    
+    <Note>
+      Both permissions are optional. Workers always have access to Orders, Customers, and Equipment modules regardless of these settings.
+    </Note>
+  </Step>
+
+  <Step title="Create the Worker">
+    Click **Crear trabajador** (Create Worker).
+    
+    The system will:
+    - Validate email uniqueness
+    - Hash the password securely
+    - Set role to "worker"
+    - Assign to your company
+    - Set status to active
+    - Display success message
+    - Add worker to the table below
+  </Step>
+</Steps>
+
+## New Worker Form Fields
+
+| Field | Required | Type | Validation |
+|-------|----------|------|------------|
+| **name** | Yes | Text | Max 255 characters |
+| **email** | Yes | Email | Max 255, must be unique in system |
+| **password** | Yes | Password | Minimum 8 characters |
+| **can_access_billing** | No | Checkbox | Boolean, default false |
+| **can_access_inventory** | No | Checkbox | Boolean, default false |
+
+<Warning>
+  Email addresses must be unique across the entire ElectroFix AI system, not just your company. If you get a "duplicate email" error, the address is already in use by another worker or admin.
+</Warning>
+
+## Managing Existing Workers
+
+The worker table shows all workers in your company with inline editing:
+
+### Worker Table Structure
+
+Each row contains an editable form with:
+
+**Name Field**
+- Editable text input
+- Update as needed
+
+**Email Field**  
+- Editable email input
+- Must remain unique
+
+**Permission Checkboxes**
+- **Facturación**: Toggle billing access
+- **Inventario**: Toggle inventory access
+
+**Save Button**
+- Click **Guardar** to apply changes
+- Updates name, email, and permissions
+- Optionally update password (see below)
+
+**Status Badge and Toggle**
+- **Green "Activo"**: Worker can log in and work
+- **Orange "Inactivo"**: Worker account disabled, cannot log in
+- **Desactivar/Reactivar Button**: Toggle status
+
+**Delete Button**
+- Red **Eliminar** button
+- Requires confirmation
+- Permanently removes worker (cannot be undone)
+
+## Updating Worker Information
+
+<Steps>
+  <Step title="Edit Fields">
+    In the worker's row, modify:
+    - Name field
+    - Email field (must remain unique)
+    - Permission checkboxes
+  </Step>
+
+  <Step title="Update Password (Optional)">
+    To change a worker's password:
+    - Password field not shown by default
+    - Implementation accepts `password` in update
+    - Only updates if new password provided
+    - Minimum 8 characters
+    
+    <Note>
+      The visible form doesn't include a password field. Workers should change their own passwords through account settings, or admins can reset via support.
+    </Note>
+  </Step>
+
+  <Step title="Save Changes">
+    Click the **Guardar** button in the worker's row.
+    
+    The system will:
+    - Validate all fields
+    - Update worker record
+    - Display success message
+    - Changes take effect immediately
+  </Step>
+</Steps>
+
+## Deactivating Workers
+
+Deactivating a worker suspends their account without deleting:
+
+<Steps>
+  <Step title="Locate Worker">
+    Find the worker in the table.
+  </Step>
+
+  <Step title="Toggle Status">
+    Click **Desactivar** (if active) or **Reactivar** (if inactive).
+  </Step>
+
+  <Step title="Confirm Result">
+    - Badge updates to show new status
+    - Deactivated workers cannot log in
+    - All worker's historical data remains intact
+    - Worker can be reactivated anytime
+  </Step>
+</Steps>
+
+### When to Deactivate vs. Delete
+
+**Deactivate when:**
+- Worker is on leave
+- Temporary suspension needed
+- Offboarding but preserving audit trail
+- Worker may return in future
+
+**Delete when:**
+- Worker will never return
+- Cleaning up test accounts
+- Removing duplicate accounts
+- Data retention policy requires removal
+
+<Warning>
+  Deletion is permanent. The worker's user record is permanently removed. However, their historical actions (orders created, inventory adjustments, etc.) remain in the system but may show "Usuario eliminado" or similar.
+</Warning>
+
+## Deleting Workers Permanently
+
+<Steps>
+  <Step title="Locate Worker">
+    Find the worker in the table.
+  </Step>
+
+  <Step title="Click Delete">
+    Click the red **Eliminar** button.
+  </Step>
+
+  <Step title="Confirm Deletion">
+    Confirm in the browser prompt:
+    - Message: "¿Eliminar definitivamente este trabajador?"
+    - Click OK to proceed
+    - Click Cancel to abort
+  </Step>
+
+  <Step title="Worker Removed">
+    - Worker record permanently deleted
+    - Worker cannot log in
+    - Email becomes available for reuse
+    - Historical data remains but orphaned
+  </Step>
+</Steps>
+
+## Module Permissions Explained
+
+### Billing Permission (`can_access_billing`)
+
+When **enabled**, worker can:
+- Access Billing/POS module from navigation
+- Create quotes and invoices
+- View all company billing documents
+- Generate and download PDFs
+- Select customers and inventory products
+- View customer service history
+
+When **disabled**:
+- Billing module hidden from navigation
+- Attempts to access show permission error
+- Worker can still create orders that admins can bill
+
+### Inventory Permission (`can_access_inventory`)
+
+When **enabled**, worker can:
+- Access Inventory module from navigation
+- Create new inventory items
+- Adjust stock (add/remove units)
+- Delete inventory items
+- View movement history
+- Receive low-stock notifications
+- Enable products for sale
+
+When **disabled**:
+- Inventory module hidden from navigation
+- Attempts to access show permission error
+- Sale-enabled products still appear in billing (if worker has billing access)
+
+### Always-Available Modules
+
+All workers can access:
+- **Orders**: Create and manage repair orders
+- **Customers**: Register and search customers
+- **Equipment**: Register equipment for customers
+- **Dashboard**: View company overview
+- **Profile Settings**: Manage own account
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Company Email Addresses">
+    Benefits of company domains:
+    - Easy to identify employee accounts
+    - Maintain control when workers leave
+    - Professional appearance
+    - Centralized email management
+    
+    **Recommended**: "juan.perez@mycompany.com"  
+    **Avoid**: "juanperez123@gmail.com"
+  </Accordion>
+  
+  <Accordion title="Grant Minimum Necessary Permissions">
+    Follow principle of least privilege:
+    - Only grant Billing access to trusted staff
+    - Only grant Inventory to warehouse/parts staff
+    - Start restrictive, expand as needed
+    - Review permissions quarterly
+    
+    **Why**: Reduces risk of errors, fraud, and data issues.
+  </Accordion>
+  
+  <Accordion title="Deactivate Instead of Delete">
+    Preserve audit trails by deactivating:
+    - Maintains attribution of past work
+    - Allows reactivation if needed
+    - Keeps reporting accurate
+    - Satisfies audit requirements
+    
+    Only delete for:
+    - Test accounts
+    - Duplicate entries
+    - Data privacy requests
+  </Accordion>
+  
+  <Accordion title="Use Strong Initial Passwords">
+    When creating workers:
+    - Use minimum 8 characters
+    - Include letters and numbers
+    - Don't reuse passwords
+    - Communicate securely (not via email)
+    - Require worker to change on first login
+  </Accordion>
+  
+  <Accordion title="Regular Permission Audits">
+    Monthly or quarterly:
+    - Review who has Billing access
+    - Review who has Inventory access
+    - Remove permissions for role changes
+    - Deactivate departed workers immediately
+    - Document permission changes
+  </Accordion>
+</AccordionGroup>
+
+## Worker Limits and Subscriptions
+
+Your subscription plan may limit the number of workers:
+
+- **Check limit**: View in Admin → Subscription
+- **Field**: `user_limit` in subscription record
+- **Enforcement**: System may prevent creating workers beyond limit
+- **Counting**: Includes active workers + admins
+
+<Note>
+  If you reach your user limit, deactivate unused workers or upgrade your subscription plan to add more team members.
+</Note>
+
+## Troubleshooting
+
+### "Email Already Exists" Error
+
+**Cause**: Email address is already registered (any company, any user).
+
+**Solutions**:
+- Use a different email address
+- Check if worker already exists in your table
+- Contact support if legitimate duplicate
+- Use email aliases: user+1@domain.com
+
+### Worker Cannot Log In
+
+**Possible Causes**:
+- Account is deactivated (check status badge)
+- Wrong password entered
+- Email typo in credentials
+- Account was deleted
+
+**Solutions**:
+1. Verify worker status is "Activo"
+2. Confirm email spelling
+3. Reset password (admin updates password field)
+4. Check if worker exists in table
+
+### Worker Cannot See Billing/Inventory Module
+
+**Cause**: Permission not granted.
+
+**Solution**:
+1. Find worker in table
+2. Check appropriate permission box (Facturación or Inventario)
+3. Click **Guardar**
+4. Worker logs out and back in
+5. Module appears in navigation
+
+### Cannot Edit or Delete Workers
+
+**Cause**: Only admins can manage workers.
+
+**Solution**:
+- Verify your role is "admin"
+- Workers cannot access this page
+- Contact company admin for role upgrade
+
+### Worker Still Appears After Deletion
+
+**Cause**: Browser cache or page not refreshed.
+
+**Solution**:
+- Refresh the page (F5 or Ctrl+R)
+- Clear browser cache
+- Check if worker can still log in (should not be able to)
+
+## Technical Reference
+
+### Controller Actions
+
+- **Index**: `GET /admin/workers` - List all workers for company
+- **Store**: `POST /admin/workers` - Create new worker
+- **Update**: `PUT /admin/workers/{user}` - Update worker info and permissions
+- **Deactivate**: `PATCH /admin/workers/{user}/deactivate` - Toggle active status
+- **Destroy**: `DELETE /admin/workers/{user}` - Permanently delete worker
+
+### Data Model
+
+```php
+[
+  'name',                  // Worker full name (max 255)
+  'email',                 // Unique email for login (max 255)
+  'password',              // Hashed password (min 8 chars input)
+  'role',                  // Always 'worker' for created users
+  'company_id',            // Auto-set to admin's company
+  'is_active',             // Boolean, true = can login
+  'can_access_billing',    // Boolean, grants billing access
+  'can_access_inventory',  // Boolean, grants inventory access
+]
+```
+
+### Authorization
+
+All worker management actions require:
+
+```php
+public function authorize(): bool
+{
+    return $this->user()?->role === 'admin';
+}
+```
+
+Additional checks:
+- Worker must belong to same company as admin
+- Cannot modify workers from other companies
+- Cannot modify admin accounts through this interface
+
+### Soft Deletes vs. Force Delete
+
+The controller uses `forceDelete()`, which:
+- Permanently removes record from database
+- Does not use soft delete functionality
+- Cannot be recovered
+- Historical references may break
+
+### Password Hashing
+
+Passwords are hashed using Laravel's `Hash::make()`:
+- Uses bcrypt algorithm
+- Automatically salted
+- Cannot be reversed
+- Secure against brute force
+
+## Integration with Other Modules
+
+### Orders Module
+- Workers can create and manage orders
+- Technician assignment limited to active workers
+- Orders retain creator information even if worker deleted
+
+### Billing Module
+- Only workers with `can_access_billing` see module
+- Billing documents record creator ID
+- Historical documents remain if worker deleted
+
+### Inventory Module
+- Only workers with `can_access_inventory` see module
+- Inventory movements record user ID
+- Movement history shows "Usuario eliminado" if worker deleted
+
+### Notifications
+- Low-stock notifications sent to workers with inventory permission
+- System notifications respect worker status (inactive = no notifications)
+
+## Related Features
+
+- [Company Settings](/guides/admin/company-settings) - Configure company details for all workers
+- [Subscription Management](/guides/admin/subscription) - Manage user limits and plan features
+- [Billing Module](/guides/worker/billing) - Feature requiring special permission
+- [Inventory Module](/guides/worker/inventory) - Feature requiring special permission

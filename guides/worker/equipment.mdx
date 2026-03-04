@@ -1,0 +1,347 @@
+---
+title: Managing Equipment
+description: Complete guide to registering and tracking customer equipment in ElectroFix AI
+---
+
+## Overview
+
+The Equipment module manages your inventory of customer-owned appliances and devices. Each equipment record tracks the device type, brand, model, serial number, and ownership, enabling you to create work orders for repairs and maintenance.
+
+### What You Can Do
+
+- Register new equipment for existing customers
+- View all equipment with owner information
+- Search equipment by brand, model, type, or owner
+- Link equipment to repair orders
+- Track equipment history across multiple repairs
+
+## Accessing Equipment Records
+
+Navigate to **Equipos** (Equipment) from the main menu. You'll see:
+
+- Grid view of all registered equipment
+- Search functionality across multiple fields
+- Total equipment count
+- Equipment organized by most recently added
+- Owner (customer) information on each card
+
+## Registering New Equipment
+
+<Steps>
+  <Step title="Open the Equipment Form">
+    Click the **Registrar Equipo** button in the top-right corner. A modal form will appear.
+  </Step>
+
+  <Step title="Select the Equipment Owner">
+    Choose the customer who owns this equipment from the **Cliente (Dueño)** dropdown:
+    - Required field
+    - Shows all customers in your company
+    - Displays customer name and email for easy identification
+    
+    <Note>
+      The customer must exist before you can register their equipment. Create the customer first if they're not in the list.
+    </Note>
+  </Step>
+
+  <Step title="Specify Equipment Type">
+    Enter the **Tipo** (Type) of equipment:
+    - Required field
+    - Maximum 100 characters
+    - Common examples: Lavadora, Refrigerador, Microondas, Televisión, Aire Acondicionado
+    
+    **Example**: "Lavadora", "Refrigerador", "Secadora"
+  </Step>
+
+  <Step title="Enter Brand Name">
+    Provide the equipment **Marca** (Brand):
+    - Required field
+    - Maximum 100 characters
+    - Use official brand spelling for consistency
+    
+    **Example**: "Samsung", "LG", "Whirlpool", "Mabe"
+  </Step>
+
+  <Step title="Add Model (Optional)">
+    Enter the specific **Modelo** (Model) if known:
+    - Optional field
+    - Maximum 150 characters
+    - Include variant or series information
+    
+    **Example**: "WF45R6300AV", "RT38K5930SL", "MGD5630HW"
+  </Step>
+
+  <Step title="Record Serial Number (Optional)">
+    Add the **Número de Serie** (Serial Number) if available:
+    - Optional field
+    - Maximum 150 characters
+    - Useful for warranty tracking and identification
+    
+    **Example**: "123ABC456DEF789"
+    
+    <Note>
+      Serial numbers help identify specific units when customers have multiple items of the same model.
+    </Note>
+  </Step>
+
+  <Step title="Save the Equipment">
+    Click **Registrar Equipo** to create the record. The system will:
+    - Validate all required fields
+    - Auto-assign equipment to the customer's company
+    - Display success confirmation
+    - Add the equipment to the list immediately
+  </Step>
+</Steps>
+
+## Equipment Form Fields
+
+| Field | Required | Type | Max Length | Notes |
+|-------|----------|------|------------|-------|
+| **Cliente (Dueño)** | Yes | Dropdown | - | Must select existing customer |
+| **Tipo** (Type) | Yes | Text | 100 | Category of equipment |
+| **Marca** (Brand) | Yes | Text | 100 | Manufacturer name |
+| **Modelo** (Model) | No | Text | 150 | Specific model identifier |
+| **Número de Serie** (Serial) | No | Text | 150 | Unique serial number |
+
+<Warning>
+  The system validates that the selected customer belongs to your company. You cannot assign equipment to customers from other companies.
+</Warning>
+
+## Viewing Equipment Records
+
+Equipment displays in a responsive grid with cards showing:
+
+### Equipment Card Layout
+
+**Header**
+- **Brand name**: Displayed prominently as the card title
+- **Type badge**: Equipment category in an info badge (e.g., "LAVADORA")
+
+**Details**
+- **Model**: Shows "Modelo no definido" if not provided
+- **Propietario**: Customer name who owns the equipment
+- **Nro Serie**: Serial number or "N/A" if not recorded
+
+### Sorting and Display
+
+- Equipment is sorted by most recently created (`created_at DESC`)
+- 18 equipment records per page
+- Pagination controls at the bottom
+- Grid adjusts responsively (1 column mobile, 2 tablet, 3 desktop)
+
+## Searching Equipment
+
+The search functionality helps you quickly locate equipment using multiple criteria:
+
+### Searchable Fields
+
+The search performs partial matching on:
+- **Brand** (Marca): "Samsung", "Sam", "sung"
+- **Model** (Modelo): "WF45", "5930"
+- **Type** (Tipo): "Lava", "Refri"
+- **Owner name**: Customer's name who owns the equipment
+
+### How to Search
+
+<Steps>
+  <Step title="Enter Search Term">
+    Type your query in the search box. You can search for:
+    - Brand names: "LG", "Whirlpool"
+    - Model numbers: "RT38K", "5630"
+    - Equipment types: "Lavadora", "Aire"
+    - Customer names: "García", "Méndez"
+  </Step>
+
+  <Step title="Execute Search">
+    Click **Buscar** or press Enter.
+  </Step>
+
+  <Step title="Review Results">
+    The grid updates to show only matching equipment. The equipment count badge reflects filtered results.
+  </Step>
+
+  <Step title="Clear Search">
+    Remove text from search box and click **Buscar** to view all equipment again.
+  </Step>
+</Steps>
+
+<Note>
+  Search is case-insensitive and finds partial matches. Searching "sam" will find "Samsung" equipment.
+</Note>
+
+## Equipment and Work Orders
+
+### Creating Orders for Equipment
+
+When you create a work order:
+1. Select the customer first
+2. The equipment dropdown filters to show only that customer's equipment
+3. Choose the specific equipment being repaired
+4. The order links to the equipment record automatically
+
+### Equipment History
+
+While not displayed directly in the equipment view, each equipment record maintains relationships to:
+- All work orders created for this equipment
+- Complete repair history
+- AI diagnostic history for recurring issues
+
+This enables tracking:
+- Repeat repairs on the same equipment
+- Common failure patterns
+- Total service cost per equipment item
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Standardized Type Names">
+    Create a consistent list of equipment types for your team:
+    - Lavadora (Washing Machine)
+    - Secadora (Dryer)
+    - Refrigerador (Refrigerator)
+    - Horno de Microondas (Microwave)
+    - Aire Acondicionado (Air Conditioner)
+    - Televisión (Television)
+    - Estufa (Stove)
+    - Lavavajillas (Dishwasher)
+    
+    Consistency improves searchability and reporting.
+  </Accordion>
+  
+  <Accordion title="Always Record Serial Numbers">
+    Capture serial numbers whenever possible:
+    - Enables warranty lookups
+    - Identifies specific units when customers own multiple of same model
+    - Helps order correct replacement parts
+    - Provides proof of service for warranty claims
+    
+    Serial numbers are typically found on labels on the back or bottom of equipment.
+  </Accordion>
+  
+  <Accordion title="Verify Brand Spelling">
+    Use official brand names to avoid duplicates:
+    - ✅ "LG" not "lg" or "L.G."
+    - ✅ "Whirlpool" not "Whirpool" or "whirlpool"
+    - ✅ "Samsung" not "samsung" or "SAMSUNG"
+    
+    Check the equipment's label or manual for correct spelling.
+  </Accordion>
+  
+  <Accordion title="Include Model Details">
+    When recording model numbers:
+    - Copy exactly as shown on equipment label
+    - Include dashes, letters, and numbers
+    - Note color or finish variants if relevant to parts
+    - Add series information if available
+  </Accordion>
+  
+  <Accordion title="Register Equipment at Intake">
+    Add equipment to the system when customers first bring it in:
+    - Capture all information while equipment is in front of you
+    - Take photos of labels if needed for later reference
+    - Record condition and any visible damage
+    - Note any missing parts or accessories
+  </Accordion>
+</AccordionGroup>
+
+## Integration with Other Modules
+
+### Customer Relationship
+- Each equipment item belongs to exactly one customer
+- Customers can own multiple equipment items
+- Equipment automatically inherits the customer's company
+
+### Order Creation
+- Equipment must exist before creating work orders
+- Order forms filter equipment by selected customer
+- Equipment details auto-populate in order views
+
+### AI Diagnostics
+- Equipment type and brand inform AI analysis
+- Model information helps AI suggest specific parts
+- Equipment history can influence repair recommendations
+
+## Troubleshooting
+
+### Cannot Select Customer in Equipment Form
+
+**Cause**: Customer must be created before equipment registration.
+
+**Solution**: 
+1. Cancel the equipment form
+2. Navigate to Customers
+3. Create the customer record
+4. Return to Equipment and try again
+
+### Equipment Not Showing in Order Form
+
+**Cause**: Equipment only appears when its owner is selected as the customer.
+
+**Solution**:
+1. Verify you selected the correct customer in the order form
+2. Check that equipment exists and belongs to that customer
+3. Search equipment list to confirm ownership
+
+### "Cliente no pertenece a tu empresa" Error
+
+**Cause**: Trying to assign equipment to a customer from a different company.
+
+**Solution**: 
+- You can only register equipment for customers in your company
+- Verify you're logged in with the correct company account
+- Check that the customer was created under your company
+
+### Duplicate Equipment Records
+
+**Issue**: Accidentally creating multiple records for the same equipment.
+
+**Prevention**:
+- Search for existing equipment before creating new records
+- Use serial numbers to identify if equipment is already registered
+- Check customer's equipment list before adding duplicates
+
+## Technical Reference
+
+### Controller Actions
+
+- **Index**: `GET /worker/equipments` - List all equipment with search and pagination
+- **Store**: `POST /worker/equipments` - Create new equipment record
+
+### Data Model
+
+```php
+[
+  'customer_id',   // Foreign key to customer (required)
+  'company_id',    // Auto-set to customer's company_id
+  'type',          // Equipment category (required, max 100)
+  'brand',         // Manufacturer (required, max 100)
+  'model',         // Model identifier (optional, max 150)
+  'serial_number', // Serial number (optional, max 150)
+]
+```
+
+### Company Validation
+
+When creating equipment, the system validates:
+
+```php
+$customer = Customer::findOrFail($request->integer('customer_id'));
+
+if ($request->user()->role !== 'developer' && 
+    $customer->company_id !== $request->user()->company_id) {
+    abort(403, 'Cliente no pertenece a tu empresa.');
+}
+```
+
+This ensures equipment is only assigned to customers within your company.
+
+### Relationships
+
+- **Belongs To**: Customer (owner)
+- **Belongs To**: Company (inherited from customer)
+- **Has Many**: Orders (repair history)
+
+## Related Features
+
+- [Managing Customers](/guides/worker/customers) - Create customer records before equipment
+- [Managing Orders](/guides/worker/orders) - Create repair orders for equipment
+- [AI Diagnostics](/api-reference/ai-diagnostic) - AI uses equipment data for better analysis

@@ -1,0 +1,130 @@
+---
+title: 'AI Diagnostic Service'
+description: 'Analyze equipment symptoms and provide diagnostic recommendations'
+---
+
+## Overview
+
+The `AiDiagnosticService` analyzes equipment symptoms using heuristic pattern matching to identify potential causes, suggest replacement parts, estimate repair time, and provide cost calculations.
+
+**Namespace:** `App\Services\AiDiagnosticService`
+
+---
+
+## Methods
+
+### analyze
+
+Analyzes equipment symptoms and returns diagnostic recommendations including potential causes, suggested parts, time estimates, and cost breakdowns.
+
+```php
+public function analyze(
+    string $type,
+    string $brand,
+    ?string $model,
+    string $symptoms
+): array
+```
+
+#### Parameters
+
+<ParamField path="type" type="string" required>
+  The type of equipment (e.g., "Lavadora", "Refrigerador")
+</ParamField>
+
+<ParamField path="brand" type="string" required>
+  The brand name of the equipment
+</ParamField>
+
+<ParamField path="model" type="string|null" required>
+  The model identifier. Can be null if unknown
+</ParamField>
+
+<ParamField path="symptoms" type="string" required>
+  Description of the symptoms or issues reported by the customer
+</ParamField>
+
+#### Returns
+
+Returns an associative array with the following structure:
+
+```php
+[
+    'equipment' => string,                    // Combined equipment identifier
+    'potential_causes' => string[],          // Array of identified causes
+    'estimated_time' => string,              // Estimated repair time (e.g., "2-4 horas")
+    'suggested_parts' => string[],           // List of parts that may need replacement
+    'technical_advice' => string,            // Technical recommendations
+    'requires_parts_replacement' => bool,    // Whether parts replacement is needed
+    'cost_suggestion' => [
+        'repair_labor_cost' => float,        // Labor cost estimate
+        'replacement_parts_cost' => float,   // Parts cost estimate
+        'replacement_total_cost' => float,   // Total cost (labor + parts)
+    ]
+]
+```
+
+#### Behavior
+
+The analysis uses pattern matching on the symptoms text to identify common issues:
+
+- **Power Issues**: Detects "no enciende" or "enciende" patterns
+  - Suggests: Tarjeta electrónica, Fusible térmico
+  - Estimated time: 3-5 hours
+  - Labor cost: $850.00
+
+- **Noise/Vibration**: Detects "ruido" or "vibr" patterns
+  - Suggests: Rodamientos, Soportes antivibración
+  - Estimated time: 2-3 hours
+  - Labor cost: $700.00
+
+- **Leaks**: Detects "fuga" or "agua" patterns
+  - Suggests: Kit de sellos, Manguera de drenaje
+  - Estimated time: 1-2 hours
+  - Labor cost: $600.00
+
+- **Generic**: When no specific patterns match
+  - Suggests: Preventive maintenance and recalibration
+  - Labor cost: $450.00
+
+#### Example Usage
+
+```php
+use App\Services\AiDiagnosticService;
+
+$service = new AiDiagnosticService();
+
+$result = $service->analyze(
+    type: 'Lavadora',
+    brand: 'LG',
+    model: 'WM3400CW',
+    symptoms: 'No enciende y hace ruido extraño al girar'
+);
+
+// Access diagnostic results
+echo $result['estimated_time'];           // "3-5 horas"
+print_r($result['potential_causes']);     // Array of identified causes
+print_r($result['suggested_parts']);      // ["Tarjeta electrónica", "Fusible térmico", ...]
+echo $result['cost_suggestion']['replacement_total_cost']; // 1490.00
+```
+
+#### Cost Calculation
+
+Parts are costed at $320.00 per item. The total replacement cost is calculated as:
+
+```php
+$replacementPartsCost = count($parts) * 320.00;
+$replacementTotalCost = $replacementPartsCost + $repairLaborCost;
+```
+
+If no parts replacement is required, all cost fields except `repair_labor_cost` are set to 0.
+
+---
+
+## Implementation Notes
+
+- The service performs case-insensitive pattern matching using `mb_strtolower()`
+- Multiple patterns can match simultaneously, combining causes and parts
+- Labor costs use `max()` to ensure the highest applicable rate is used
+- All monetary values are rounded to 2 decimal places
+- Duplicate parts are automatically removed using `array_unique()`

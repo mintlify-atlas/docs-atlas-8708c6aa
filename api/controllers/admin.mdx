@@ -1,0 +1,517 @@
+---
+title: 'Admin Controllers'
+description: 'API reference for Admin role controllers - Company settings, Worker management, and Subscriptions'
+---
+
+## Overview
+
+Admin controllers handle company-level configuration and user management. All routes require authentication and the `role:admin` middleware.
+
+---
+
+## Company Management
+
+Manage company profile and settings.
+
+### View Company Settings
+
+<ParamField path="GET /admin/company" type="route">
+  Display company information edit form.
+</ParamField>
+
+**Middleware:** `auth`, `role:admin`
+
+**Route Name:** `admin.company.edit`
+
+**Response:**
+- Returns view with company details
+- Form for editing company information
+
+**Authorization:** User must have an associated company
+
+**Controller:** `App\Http\Controllers\Admin\CompanyController@edit`
+
+**Source:** routes/web.php:73
+
+---
+
+### Update Company Settings
+
+<ParamField path="PUT /admin/company" type="route">
+  Update company information.
+</ParamField>
+
+**Middleware:** `auth`, `role:admin`
+
+**Route Name:** `admin.company.update`
+
+**Request Parameters:**
+
+<ParamField body="name" type="string" required>
+  Company name (max 255 characters)
+</ParamField>
+
+<ParamField body="owner_name" type="string" required>
+  Owner's full name (max 255 characters)
+</ParamField>
+
+<ParamField body="owner_email" type="string" required>
+  Owner's email address (max 255 characters)
+</ParamField>
+
+<ParamField body="owner_phone" type="string" required>
+  Owner's phone number (max 50 characters)
+</ParamField>
+
+<ParamField body="tax_id" type="string" optional>
+  Company tax ID or VAT number (max 120 characters)
+</ParamField>
+
+<ParamField body="billing_email" type="string" optional>
+  Billing contact email (max 255 characters)
+</ParamField>
+
+<ParamField body="billing_phone" type="string" optional>
+  Billing contact phone (max 50 characters)
+</ParamField>
+
+<ParamField body="address_line" type="string" optional>
+  Street address (max 255 characters)
+</ParamField>
+
+<ParamField body="city" type="string" optional>
+  City name (max 120 characters)
+</ParamField>
+
+<ParamField body="state" type="string" optional>
+  State or province (max 120 characters)
+</ParamField>
+
+<ParamField body="country" type="string" required>
+  Two-letter country code (ISO 3166-1 alpha-2, e.g., "US", "MX")
+</ParamField>
+
+<ParamField body="postal_code" type="string" optional>
+  Postal or ZIP code (max 20 characters)
+</ParamField>
+
+<ParamField body="currency" type="string" required>
+  Three-letter currency code (ISO 4217, e.g., "USD", "EUR", "MXN")
+</ParamField>
+
+<ParamField body="vat_percentage" type="number" required>
+  VAT/tax percentage (0-100)
+</ParamField>
+
+<ParamField body="notes" type="string" optional>
+  Additional company notes
+</ParamField>
+
+**Response:**
+- Redirects back with success message
+
+**Authorization:** User must be admin with associated company
+
+**Validation:** `UpdateCompanyRequest`
+
+**Controller:** `App\Http\Controllers\Admin\CompanyController@update`
+
+**Source:** routes/web.php:74
+
+---
+
+## Worker Management
+
+Manage worker accounts and permissions.
+
+### List Workers
+
+<ParamField path="GET /admin/workers" type="route">
+  Display all workers in the company.
+</ParamField>
+
+**Middleware:** `auth`, `role:admin`
+
+**Route Name:** `admin.workers.index`
+
+**Response:**
+- Returns view with all workers (including soft-deleted)
+- Ordered by name
+- Only shows workers from admin's company
+
+**Controller:** `App\Http\Controllers\Admin\WorkerController@index`
+
+**Source:** routes/web.php:75
+
+---
+
+### Create Worker
+
+<ParamField path="POST /admin/workers" type="route">
+  Create a new worker account.
+</ParamField>
+
+**Middleware:** `auth`, `role:admin`
+
+**Route Name:** `admin.workers.store`
+
+**Request Parameters:**
+
+<ParamField body="name" type="string" required>
+  Worker's full name (max 255 characters)
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  Worker's email address (max 255 characters, must be unique)
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  Initial password (minimum 8 characters)
+</ParamField>
+
+<ParamField body="can_access_billing" type="boolean" optional>
+  Grant access to billing module (default: false)
+</ParamField>
+
+<ParamField body="can_access_inventory" type="boolean" optional>
+  Grant access to inventory module (default: false)
+</ParamField>
+
+**Response:**
+- Redirects back with success message
+- Worker is automatically assigned to admin's company
+- Worker role is set to "worker"
+- Account is active by default
+
+**Validation:** `StoreWorkerRequest`
+
+**Controller:** `App\Http\Controllers\Admin\WorkerController@store`
+
+**Source:** routes/web.php:76
+
+---
+
+### Update Worker
+
+<ParamField path="PUT /admin/workers/{user}" type="route">
+  Update worker account details and permissions.
+</ParamField>
+
+**Middleware:** `auth`, `role:admin`
+
+**Route Name:** `admin.workers.update`
+
+**URL Parameters:**
+
+<ParamField path="user" type="integer" required>
+  Worker user ID
+</ParamField>
+
+**Request Parameters:**
+
+<ParamField body="name" type="string" required>
+  Worker's full name (max 255 characters)
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  Worker's email address (max 255 characters, unique except for this user)
+</ParamField>
+
+<ParamField body="password" type="string" optional>
+  New password (minimum 8 characters, only if changing password)
+</ParamField>
+
+<ParamField body="can_access_billing" type="boolean" optional>
+  Update billing module access
+</ParamField>
+
+<ParamField body="can_access_inventory" type="boolean" optional>
+  Update inventory module access
+</ParamField>
+
+**Response:**
+- Redirects back with success message
+
+**Authorization:** Worker must belong to admin's company and have "worker" role
+
+**Validation:** `UpdateWorkerRequest`
+
+**Controller:** `App\Http\Controllers\Admin\WorkerController@update`
+
+**Source:** routes/web.php:77
+
+---
+
+### Toggle Worker Active Status
+
+<ParamField path="PATCH /admin/workers/{user}/deactivate" type="route">
+  Activate or deactivate a worker account.
+</ParamField>
+
+**Middleware:** `auth`, `role:admin`
+
+**Route Name:** `admin.workers.deactivate`
+
+**URL Parameters:**
+
+<ParamField path="user" type="integer" required>
+  Worker user ID
+</ParamField>
+
+**Response:**
+- Redirects back with success message
+- Toggles `is_active` status
+- Inactive workers cannot log in
+
+**Authorization:** Worker must belong to admin's company and have "worker" role
+
+**Controller:** `App\Http\Controllers\Admin\WorkerController@deactivate`
+
+**Source:** routes/web.php:78
+
+---
+
+### Delete Worker
+
+<ParamField path="DELETE /admin/workers/{user}" type="route">
+  Permanently delete a worker account.
+</ParamField>
+
+**Middleware:** `auth`, `role:admin`
+
+**Route Name:** `admin.workers.destroy`
+
+**URL Parameters:**
+
+<ParamField path="user" type="integer" required>
+  Worker user ID
+</ParamField>
+
+**Response:**
+- Redirects back with success message
+- Performs force delete (permanent)
+
+**Authorization:** Worker must belong to admin's company and have "worker" role
+
+**Controller:** `App\Http\Controllers\Admin\WorkerController@destroy`
+
+**Source:** routes/web.php:79
+
+---
+
+## Subscription Management
+
+Manage company subscription plans and settings.
+
+### View Subscription
+
+<ParamField path="GET /admin/subscription" type="route">
+  Display subscription details and edit form.
+</ParamField>
+
+**Middleware:** `auth`, `role:admin`
+
+**Route Name:** `admin.subscription.edit`
+
+**Response:**
+- Returns view with subscription details
+- If no subscription exists, creates default trial subscription:
+  - Plan: "starter"
+  - Status: "trial"
+  - Duration: 1 month from now
+  - Billing cycle: "monthly"
+  - User limit: 10
+
+**Authorization:** User must have an associated company
+
+**Controller:** `App\Http\Controllers\Admin\SubscriptionController@edit`
+
+**Source:** routes/web.php:80
+
+---
+
+### Update Subscription
+
+<ParamField path="PUT /admin/subscription" type="route">
+  Update subscription plan and settings.
+</ParamField>
+
+**Middleware:** `auth`, `role:admin`
+
+**Route Name:** `admin.subscription.update`
+
+**Request Parameters:**
+
+<ParamField body="plan" type="string" required>
+  Subscription plan: "starter", "pro", "enterprise", or "developer_test"
+</ParamField>
+
+<ParamField body="status" type="string" required>
+  Subscription status: "active", "trial", "past_due", "canceled", or "suspended"
+</ParamField>
+
+<ParamField body="starts_at" type="date" required>
+  Subscription start date (format: YYYY-MM-DD)
+</ParamField>
+
+<ParamField body="ends_at" type="date" required>
+  Subscription end date (must be on or after starts_at)
+</ParamField>
+
+<ParamField body="billing_cycle" type="string" required>
+  Billing frequency: "monthly" or "yearly"
+</ParamField>
+
+<ParamField body="user_limit" type="integer" optional>
+  Maximum number of users allowed (1-100,000)
+</ParamField>
+
+**Response:**
+- Redirects back with success message
+
+**Authorization:** User must be admin with associated company
+
+**Validation:** `UpdateSubscriptionRequest`
+
+**Controller:** `App\Http\Controllers\Admin\SubscriptionController@update`
+
+**Source:** routes/web.php:81
+
+---
+
+## Usage Examples
+
+### Updating Company Information
+
+```html
+<form method="POST" action="{{ route('admin.company.update') }}">
+    @csrf
+    @method('PUT')
+    
+    <!-- Basic Information -->
+    <input type="text" name="name" value="ElectroFix Repairs">
+    <input type="text" name="owner_name" value="John Smith">
+    <input type="email" name="owner_email" value="john@electrofix.com">
+    <input type="text" name="owner_phone" value="+1-555-0100">
+    
+    <!-- Tax & Billing -->
+    <input type="text" name="tax_id" value="123-45-6789">
+    <input type="email" name="billing_email" value="billing@electrofix.com">
+    <input type="text" name="billing_phone" value="+1-555-0101">
+    
+    <!-- Address -->
+    <input type="text" name="address_line" value="123 Main Street">
+    <input type="text" name="city" value="San Francisco">
+    <input type="text" name="state" value="California">
+    <input type="text" name="country" value="US">
+    <input type="text" name="postal_code" value="94102">
+    
+    <!-- Financial Settings -->
+    <input type="text" name="currency" value="USD">
+    <input type="number" name="vat_percentage" value="8.5" step="0.01">
+    
+    <textarea name="notes">Additional company information</textarea>
+    
+    <button type="submit">Update Company</button>
+</form>
+```
+
+### Creating a New Worker
+
+```html
+<form method="POST" action="{{ route('admin.workers.store') }}">
+    @csrf
+    <input type="text" name="name" placeholder="Worker Name" required>
+    <input type="email" name="email" placeholder="worker@example.com" required>
+    <input type="password" name="password" placeholder="Password (min 8 chars)" required>
+    
+    <label>
+        <input type="checkbox" name="can_access_billing" value="1">
+        Access to Billing Module
+    </label>
+    
+    <label>
+        <input type="checkbox" name="can_access_inventory" value="1">
+        Access to Inventory Module
+    </label>
+    
+    <button type="submit">Create Worker</button>
+</form>
+```
+
+### Updating Subscription
+
+```html
+<form method="POST" action="{{ route('admin.subscription.update') }}">
+    @csrf
+    @method('PUT')
+    
+    <select name="plan" required>
+        <option value="starter">Starter</option>
+        <option value="pro">Pro</option>
+        <option value="enterprise">Enterprise</option>
+    </select>
+    
+    <select name="status" required>
+        <option value="active">Active</option>
+        <option value="trial">Trial</option>
+        <option value="past_due">Past Due</option>
+        <option value="canceled">Canceled</option>
+        <option value="suspended">Suspended</option>
+    </select>
+    
+    <input type="date" name="starts_at" value="2024-01-01" required>
+    <input type="date" name="ends_at" value="2024-12-31" required>
+    
+    <select name="billing_cycle" required>
+        <option value="monthly">Monthly</option>
+        <option value="yearly">Yearly</option>
+    </select>
+    
+    <input type="number" name="user_limit" value="25" min="1" max="100000">
+    
+    <button type="submit">Update Subscription</button>
+</form>
+```
+
+### Deactivating a Worker
+
+```html
+<form method="POST" action="{{ route('admin.workers.deactivate', $worker) }}">
+    @csrf
+    @method('PATCH')
+    <button type="submit">
+        {{ $worker->is_active ? 'Deactivate' : 'Activate' }} Worker
+    </button>
+</form>
+```
+
+### Deleting a Worker (Permanent)
+
+```html
+<form method="POST" action="{{ route('admin.workers.destroy', $worker) }}" 
+      onsubmit="return confirm('Permanently delete this worker? This cannot be undone!')">
+    @csrf
+    @method('DELETE')
+    <button type="submit" class="danger">Delete Worker Permanently</button>
+</form>
+```
+
+---
+
+## Module Access Control
+
+Workers can be granted access to optional modules:
+
+- **Billing Module** (`can_access_billing`): Access to invoice/quote generation
+- **Inventory Module** (`can_access_inventory`): Access to inventory management
+
+These permissions are checked by the `module_access` middleware on relevant routes.
+
+**Example Permission Check:**
+```php
+// In controller or middleware
+if ($user->canAccessModule('billing')) {
+    // Allow access to billing routes
+}
+```

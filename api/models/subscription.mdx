@@ -1,0 +1,200 @@
+---
+title: 'Subscription Model'
+description: 'API reference for the Subscription model in ElectroFix'
+---
+
+## Overview
+
+The Subscription model manages company subscription plans in ElectroFix. Each company has one active subscription that determines their plan type, billing cycle, user limits, and subscription status.
+
+## Properties
+
+### Fillable Attributes
+
+<ParamField path="company_id" type="integer" required>
+  Foreign key to the Company this subscription belongs to
+</ParamField>
+
+<ParamField path="plan" type="string" required>
+  The subscription plan name or tier (e.g., 'basic', 'pro', 'enterprise')
+</ParamField>
+
+<ParamField path="status" type="string" required>
+  Current subscription status (e.g., 'active', 'trial', 'cancelled', 'expired')
+</ParamField>
+
+<ParamField path="starts_at" type="date" required>
+  Date when the subscription begins
+</ParamField>
+
+<ParamField path="ends_at" type="date">
+  Date when the subscription ends or renews
+</ParamField>
+
+<ParamField path="billing_cycle" type="string">
+  Billing frequency (e.g., 'monthly', 'yearly')
+</ParamField>
+
+<ParamField path="user_limit" type="integer">
+  Maximum number of users allowed under this subscription
+</ParamField>
+
+## Casts
+
+```php
+protected function casts(): array
+{
+    return [
+        'starts_at' => 'date',
+        'ends_at' => 'date',
+    ];
+}
+```
+
+Both `starts_at` and `ends_at` are automatically cast to Carbon date instances, making date manipulation and comparison easier.
+
+## Relationships
+
+### company()
+
+**Type:** `BelongsTo`
+
+Returns the company that owns this subscription.
+
+```php
+public function company(): BelongsTo
+{
+    return $this->belongsTo(Company::class);
+}
+```
+
+## Usage Examples
+
+### Creating a New Subscription
+
+```php
+$subscription = Subscription::create([
+    'company_id' => 1,
+    'plan' => 'pro',
+    'status' => 'active',
+    'starts_at' => now(),
+    'ends_at' => now()->addYear(),
+    'billing_cycle' => 'yearly',
+    'user_limit' => 10,
+]);
+```
+
+### Checking Subscription Status
+
+```php
+// Check if subscription is active
+$company = Company::find(1);
+$subscription = $company->subscription;
+
+if ($subscription->status === 'active' && $subscription->ends_at->isFuture()) {
+    // Subscription is valid
+}
+```
+
+### Updating Subscription Plan
+
+```php
+// Upgrade to a higher tier
+$subscription->update([
+    'plan' => 'enterprise',
+    'user_limit' => 50,
+    'ends_at' => now()->addYear(),
+]);
+```
+
+### Renewing a Subscription
+
+```php
+// Renew for another billing cycle
+$subscription->update([
+    'status' => 'active',
+    'starts_at' => $subscription->ends_at,
+    'ends_at' => $subscription->ends_at->addYear(),
+]);
+```
+
+### Cancelling a Subscription
+
+```php
+// Cancel at end of period
+$subscription->update([
+    'status' => 'cancelled',
+]);
+```
+
+### Checking User Limits
+
+```php
+$company = Company::find(1);
+$userCount = $company->users()->count();
+$subscription = $company->subscription;
+
+if ($userCount >= $subscription->user_limit) {
+    // Cannot add more users
+    throw new Exception('User limit reached for this subscription plan');
+}
+```
+
+### Querying Active Subscriptions
+
+```php
+// Get all active subscriptions
+$activeSubscriptions = Subscription::where('status', 'active')
+    ->where('ends_at', '>', now())
+    ->get();
+
+// Get expiring subscriptions (next 30 days)
+$expiringSubscriptions = Subscription::where('status', 'active')
+    ->whereBetween('ends_at', [now(), now()->addDays(30)])
+    ->with('company')
+    ->get();
+```
+
+### Working with Dates
+
+```php
+// Check days remaining
+$daysRemaining = $subscription->ends_at->diffInDays(now());
+
+// Check if trial period
+if ($subscription->status === 'trial' && $subscription->ends_at->isPast()) {
+    // Trial expired, convert to paid or cancel
+}
+
+// Format dates for display
+$startDate = $subscription->starts_at->format('M d, Y');
+$endDate = $subscription->ends_at->format('M d, Y');
+```
+
+## Common Patterns
+
+### Subscription Middleware Check
+
+```php
+// Check if company has valid subscription
+$company = auth()->user()->company;
+$subscription = $company->subscription;
+
+if (!$subscription || $subscription->status !== 'active' || $subscription->ends_at->isPast()) {
+    return redirect()->route('subscription.expired');
+}
+```
+
+### Feature Access by Plan
+
+```php
+$allowedPlans = ['pro', 'enterprise'];
+
+if (in_array($subscription->plan, $allowedPlans)) {
+    // Allow access to premium feature
+}
+```
+
+## Source Reference
+
+Model file: `/home/daytona/workspace/source/app/Models/Subscription.php`

@@ -1,0 +1,285 @@
+---
+title: 'Customer Model'
+description: 'API reference for the Customer model in ElectroFix'
+---
+
+## Overview
+
+The Customer model represents clients who bring equipment for repair. Each customer belongs to a company and can have multiple pieces of equipment, repair orders, and billing documents.
+
+## Properties
+
+### Fillable Attributes
+
+<ParamField path="company_id" type="integer" required>
+  Foreign key to the Company this customer belongs to
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Full name of the customer
+</ParamField>
+
+<ParamField path="email" type="string">
+  Customer's email address for communication
+</ParamField>
+
+<ParamField path="phone" type="string">
+  Customer's phone number
+</ParamField>
+
+<ParamField path="address" type="text">
+  Customer's physical address
+</ParamField>
+
+## Relationships
+
+### company()
+
+**Type:** `BelongsTo`
+
+Returns the company this customer belongs to.
+
+```php
+public function company(): BelongsTo
+{
+    return $this->belongsTo(Company::class);
+}
+```
+
+### equipments()
+
+**Type:** `HasMany`
+
+Returns all equipment owned by this customer.
+
+```php
+public function equipments(): HasMany
+{
+    return $this->hasMany(Equipment::class);
+}
+```
+
+### orders()
+
+**Type:** `HasMany`
+
+Returns all repair orders for this customer.
+
+```php
+public function orders(): HasMany
+{
+    return $this->hasMany(Order::class);
+}
+```
+
+### billingDocuments()
+
+**Type:** `HasMany`
+
+Returns all billing documents (invoices, quotes) for this customer.
+
+```php
+public function billingDocuments(): HasMany
+{
+    return $this->hasMany(BillingDocument::class);
+}
+```
+
+## Usage Examples
+
+### Creating a New Customer
+
+```php
+$customer = Customer::create([
+    'company_id' => 1,
+    'name' => 'John Smith',
+    'email' => 'john.smith@example.com',
+    'phone' => '+1-555-0123',
+    'address' => '123 Main Street, Apt 4B, New York, NY 10001',
+]);
+```
+
+### Querying Customers
+
+```php
+// Get all customers for a company
+$customers = Customer::where('company_id', $companyId)
+    ->orderBy('name')
+    ->get();
+
+// Search customers by name or email
+$searchTerm = 'john';
+$results = Customer::where('company_id', $companyId)
+    ->where(function($query) use ($searchTerm) {
+        $query->where('name', 'like', "%{$searchTerm}%")
+              ->orWhere('email', 'like', "%{$searchTerm}%");
+    })
+    ->get();
+```
+
+### Accessing Customer Relationships
+
+```php
+// Get all equipment for a customer
+$equipment = $customer->equipments;
+
+// Get all orders with equipment details
+$orders = $customer->orders()
+    ->with('equipment')
+    ->orderBy('created_at', 'desc')
+    ->get();
+
+// Get customer's billing history
+$billingHistory = $customer->billingDocuments()
+    ->orderBy('issued_at', 'desc')
+    ->get();
+```
+
+### Updating Customer Information
+
+```php
+$customer->update([
+    'email' => 'newemail@example.com',
+    'phone' => '+1-555-9999',
+]);
+```
+
+### Customer Statistics
+
+```php
+// Count total orders for customer
+$totalOrders = $customer->orders()->count();
+
+// Get completed orders
+$completedOrders = $customer->orders()
+    ->where('status', 'completed')
+    ->count();
+
+// Calculate total billing amount
+$totalBilled = $customer->billingDocuments()
+    ->sum('total');
+
+// Get pending orders
+$pendingOrders = $customer->orders()
+    ->whereIn('status', ['pending', 'in_progress'])
+    ->with('equipment')
+    ->get();
+```
+
+### Customer with Equipment Count
+
+```php
+// Get customers with equipment count
+$customers = Customer::where('company_id', $companyId)
+    ->withCount('equipments')
+    ->get();
+
+foreach ($customers as $customer) {
+    echo "{$customer->name} has {$customer->equipments_count} equipment\n";
+}
+```
+
+### Finding Customer by Contact Info
+
+```php
+// Find by email
+$customer = Customer::where('company_id', $companyId)
+    ->where('email', $email)
+    ->first();
+
+// Find by phone
+$customer = Customer::where('company_id', $companyId)
+    ->where('phone', $phone)
+    ->first();
+```
+
+### Recent Customer Activity
+
+```php
+// Get customers with recent orders
+$activeCustomers = Customer::where('company_id', $companyId)
+    ->whereHas('orders', function($query) {
+        $query->where('created_at', '>=', now()->subMonths(3));
+    })
+    ->with(['orders' => function($query) {
+        $query->latest()->limit(5);
+    }])
+    ->get();
+```
+
+### Customer Validation
+
+```php
+// Check if customer has pending orders before deleting
+if ($customer->orders()->whereIn('status', ['pending', 'in_progress'])->exists()) {
+    throw new Exception('Cannot delete customer with pending orders');
+}
+
+$customer->delete();
+```
+
+### Export Customer List
+
+```php
+// Get customers with their summary data
+$customerData = Customer::where('company_id', $companyId)
+    ->withCount(['orders', 'equipments'])
+    ->with('billingDocuments')
+    ->get()
+    ->map(function($customer) {
+        return [
+            'name' => $customer->name,
+            'email' => $customer->email,
+            'phone' => $customer->phone,
+            'total_orders' => $customer->orders_count,
+            'total_equipment' => $customer->equipments_count,
+            'total_billed' => $customer->billingDocuments->sum('total'),
+        ];
+    });
+```
+
+## Common Patterns
+
+### Creating Customer with Equipment
+
+```php
+$customer = Customer::create([
+    'company_id' => $companyId,
+    'name' => 'Jane Doe',
+    'email' => 'jane@example.com',
+    'phone' => '+1-555-0456',
+]);
+
+$equipment = $customer->equipments()->create([
+    'company_id' => $companyId,
+    'type' => 'Laptop',
+    'brand' => 'Dell',
+    'model' => 'XPS 15',
+    'serial_number' => 'SN123456',
+]);
+```
+
+### Customer Order History Report
+
+```php
+$customer = Customer::with([
+    'orders' => function($query) {
+        $query->orderBy('created_at', 'desc');
+    },
+    'orders.equipment',
+    'billingDocuments'
+])->find($customerId);
+
+// Generate report data
+$report = [
+    'customer' => $customer->name,
+    'contact' => $customer->email,
+    'total_orders' => $customer->orders->count(),
+    'completed_orders' => $customer->orders->where('status', 'completed')->count(),
+    'total_spent' => $customer->billingDocuments->sum('total'),
+];
+```
+
+## Source Reference
+
+Model file: `/home/daytona/workspace/source/app/Models/Customer.php`

@@ -1,0 +1,385 @@
+---
+title: Roles & Permissions
+description: Understanding user roles, capabilities, and access control in ElectroFix AI
+---
+
+## Overview
+
+ElectroFix AI implements a **role-based access control (RBAC)** system with three distinct user roles. Each role has different capabilities and access levels within their company's scope.
+
+## User Roles
+
+### 1. Worker
+
+**Purpose**: Front-line technicians and service workers
+
+**Capabilities**:
+- View and create service orders
+- Access customer and equipment records
+- Request AI diagnostics for equipment issues
+- Update order status
+- Automatically assigned as technician on orders they create
+
+**Restrictions**:
+- Cannot assign orders to other technicians
+- Module access controlled by permissions flags
+- Can only access data within their company
+
+**Database Definition**:
+```php
+// From alter_users_for_multi_tenant_and_permissions.php:21
+DB::statement("ALTER TABLE users MODIFY role ENUM('admin','worker','developer') NOT NULL DEFAULT 'worker'");
+```
+
+### 2. Admin
+
+**Purpose**: Company administrators and managers
+
+**Capabilities**:
+- Full access to all company data
+- Manage company settings and profile
+- Create and manage worker accounts
+- Assign orders to any technician in the company
+- Access all operational modules (billing, inventory)
+- Manage subscription plan
+- View company-wide analytics
+
+**Special Privileges**:
+- Can deactivate worker accounts
+- Can configure module access for workers
+- Can update company VAT and billing settings
+
+### 3. Developer
+
+**Purpose**: Platform administrators and developers
+
+**Capabilities**:
+- Cross-company access (bypass multi-tenancy)
+- View all companies and subscriptions
+- Access test company environment
+- View company insights and analytics
+- Full system access for debugging
+
+**Security Note**: This role is **not multi-tenant scoped** and should only be assigned to trusted platform administrators.
+
+## Role Implementation
+
+### User Model
+
+The `User` model includes role-checking methods:
+
+```php
+// app/Models/User.php:24-58
+protected $fillable = [
+    'name',
+    'email',
+    'company_id',
+    'role',                    // admin, worker, or developer
+    'is_active',              // Account status
+    'can_access_billing',     // Module permission
+    'can_access_inventory',   // Module permission
+    'password',
+];
+
+protected function casts(): array
+{
+    return [
+        'is_active' => 'boolean',
+        'can_access_billing' => 'boolean',
+        'can_access_inventory' => 'boolean',
+    ];
+}
+
+public function isRole(string $role): bool
+{
+    return $this->role === $role;
+}
+```
+
+## Module-Level Permissions
+
+### Permission Flags
+
+Worker users have granular module access control:
+
+- `can_access_billing` - Access to billing documents and invoices
+- `can_access_inventory` - Access to inventory management
+
+### Permission Check Logic
+
+```php
+// app/Models/User.php:81-96
+public function canAccessModule(string $module): bool
+{
+    // Admin and Developer have full access
+    if ($this->isRole('admin') || $this->isRole('developer')) {
+        return true;
+    }
+
+    // Non-workers have no access
+    if (! $this->isRole('worker')) {
+        return false;
+    }
+
+    // Check worker-specific permissions
+    return match ($module) {
+        'billing' => $this->can_access_billing,
+        'inventory' => $this->can_access_inventory,
+        default => true,  // Base modules accessible to all workers
+    };
+}
+```
+
+## Middleware
+
+### EnsureRole Middleware
+
+Restricts route access based on user role:
+
+```php
+// app/Http/Middleware/EnsureRole.php
+class EnsureRole
+{
+    public function handle(Request $request, Closure $next, string ...$roles): Response
+    {
+        $user = $request->user();
+
+        // Check if user has one of the allowed roles
+        if (! $user || ! in_array($user->role, $roles, true)) {
+            abort(403, 'No tienes permisos para acceder a esta sección.');
+        }
+
+        // Check if account is active
+        if (! $user->is_active) {
+            abort(403, 'Tu cuenta está desactivada.');
+        }
+
+        return $next($request);
+    }
+}
+```
+
+**Usage in Routes**:
+```php
+// routes/web.php:27-39
+Route::middleware('role:worker,admin,developer')->group(function (): void {
+    Route::get('/worker/orders', [OrderController::class, 'index']);
+    Route::post('/worker/orders', [OrderController::class, 'store']);
+});
+
+Route::middleware('role:admin')->group(function (): void {
+    Route::get('/admin/workers', [WorkerController::class, 'index']);
+    Route::post('/admin/workers', [WorkerController::class, 'store']);
+});
+
+Route::middleware('role:developer')->group(function (): void {
+    Route::get('/developer/companies', [CompanyInsightsController::class, 'index']);
+});
+```
+
+### EnsureModuleAccess Middleware
+
+Enforces module-level permissions for workers:
+
+```php
+// app/Http/Middleware/EnsureModuleAccess.php
+class EnsureModuleAccess
+{
+    public function handle(Request $request, Closure $next, string $module): Response
+    {
+        $user = $request->user();
+
+        if (! $user || ! $user->canAccessModule($module)) {
+            abort(403, 'No tienes permisos para este módulo.');
+        }
+
+        return $next($request);
+    }
+}
+```
+
+**Usage in Routes**:
+```php
+// routes/web.php:41-69
+Route::middleware('role:worker,admin,developer')->group(function (): void {
+    Route::get('/worker/inventory', [InventoryController::class, 'index'])
+        ->middleware('module_access:inventory');
+    
+    Route::post('/worker/inventory', [InventoryController::class, 'store'])
+        ->middleware('module_access:inventory');
+    
+    Route::get('/worker/billing', [BillingController::class, 'index'])
+        ->middleware('module_access:billing');
+});
+```
+
+## Role-Specific Features
+
+### Worker: Auto-Assignment
+
+Workers are automatically assigned as the technician on orders they create:
+
+```php
+// app/Services/OrderCreationService.php:154-158
+private function resolveTechnician(User $actor, int $companyId, array $payload): string
+{
+    if ($actor->role === 'worker') {
+        return $actor->name;  // Auto-assign
+    }
+    // ... admin logic
+}
+```
+
+### Admin: Technician Assignment
+
+Admins can assign orders to any active worker or admin in their company:
+
+```php
+// app/Services/OrderCreationService.php:160-175
+if ($actor->role === 'admin') {
+    $technicianId = (int) ($payload['technician_user_id'] ?? 0);
+
+    $technician = User::query()
+        ->where('id', $technicianId)
+        ->where('company_id', $companyId)
+        ->whereIn('role', ['worker', 'admin'])
+        ->where('is_active', true)
+        ->first();
+
+    if (! $technician) {
+        abort(422, 'Debes seleccionar un técnico activo (worker o admin) de tu empresa.');
+    }
+
+    return $technician->name;
+}
+```
+
+### Developer: Cross-Company Access
+
+Developers bypass company scoping in queries:
+
+```php
+// app/Http/Controllers/Worker/OrderController.php:33-45
+if ($user->role !== 'developer') {
+    $companyId = $user->company_id;
+    $orders->where('company_id', $companyId);
+    $customers->where('company_id', $companyId);
+    $equipments->where('company_id', $companyId);
+}
+// Developers see all data across all companies
+```
+
+## Account Status
+
+### Active Status Check
+
+The `is_active` flag controls account access:
+
+```php
+// Checked in EnsureRole middleware
+if (! $user->is_active) {
+    abort(403, 'Tu cuenta está desactivada.');
+}
+```
+
+### Deactivation (Admin Only)
+
+Admins can deactivate worker accounts without deleting them:
+
+```php
+// routes/web.php:78
+Route::patch('/admin/workers/{user}/deactivate', [WorkerController::class, 'deactivate']);
+```
+
+## Permission Matrix
+
+| Feature | Worker | Admin | Developer |
+|---------|--------|-------|----------|
+| View own company orders | ✅ | ✅ | ✅ (all companies) |
+| Create orders | ✅ | ✅ | ✅ |
+| Assign orders to others | ❌ | ✅ | ✅ |
+| Access inventory | 🔒 Permission flag | ✅ | ✅ |
+| Access billing | 🔒 Permission flag | ✅ | ✅ |
+| Manage workers | ❌ | ✅ | ❌ |
+| Edit company settings | ❌ | ✅ | ❌ |
+| Manage subscription | ❌ | ✅ | ❌ |
+| Cross-company access | ❌ | ❌ | ✅ |
+| View company insights | ❌ | ❌ | ✅ |
+
+🔒 = Requires specific permission flag
+
+## Dashboard Access
+
+Each role has a dedicated dashboard:
+
+```php
+// routes/web.php:25-90
+Route::get('/dashboard/worker', [DashboardController::class, 'worker'])
+    ->middleware('role:worker,admin,developer');
+
+Route::get('/dashboard/admin', [DashboardController::class, 'admin'])
+    ->middleware('role:admin');
+
+Route::get('/dashboard/developer', [DashboardController::class, 'developer'])
+    ->middleware('role:developer');
+```
+
+## Best Practices
+
+### 1. Always Check Role Before Operations
+
+```php
+if ($user->isRole('worker')) {
+    // Worker-specific logic
+} elseif ($user->isRole('admin')) {
+    // Admin-specific logic
+}
+```
+
+### 2. Use Middleware for Route Protection
+
+```php
+// Prefer middleware over controller checks
+Route::middleware('role:admin')->group(function () {
+    // Admin-only routes
+});
+```
+
+### 3. Combine Role and Module Checks
+
+```php
+Route::middleware(['role:worker,admin,developer', 'module_access:inventory'])
+    ->group(function () {
+        // Inventory routes
+    });
+```
+
+### 4. Check Active Status
+
+Always verify `is_active` before allowing operations (handled by `EnsureRole` middleware).
+
+### 5. Developer Role Security
+
+Use the developer role sparingly and only for trusted users, as it bypasses tenant isolation.
+
+## Database Schema
+
+```php
+// Migration: alter_users_for_multi_tenant_and_permissions.php
+Schema::table('users', function (Blueprint $table): void {
+    $table->foreignId('company_id')->nullable()->constrained()->nullOnDelete();
+    $table->boolean('is_active')->default(true);
+    $table->boolean('can_access_billing')->default(false);
+    $table->boolean('can_access_inventory')->default(false);
+    $table->softDeletes();
+    $table->index(['company_id', 'role', 'is_active']);
+});
+
+DB::statement("ALTER TABLE users MODIFY role ENUM('admin','worker','developer') NOT NULL DEFAULT 'worker'");
+```
+
+## Related Topics
+
+- [Multi-Tenancy](/concepts/multi-tenancy) - Company data isolation
+- [Subscription Plans](/concepts/subscription-plans) - Plan-based feature access
+- [AI Diagnostics](/concepts/ai-diagnostics) - AI usage quotas by role

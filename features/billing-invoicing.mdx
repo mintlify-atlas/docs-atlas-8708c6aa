@@ -1,0 +1,498 @@
+---
+title: Billing & Invoicing
+description: Generate quotes and invoices with automatic VAT calculation and PDF export
+---
+
+The billing module creates professional invoices and quotes for repairs, sales, or mixed transactions. It integrates with service orders and inventory to provide comprehensive billing capabilities.
+
+## Document Types
+
+<CardGroup cols={2}>
+  <Card title="Quote" icon="file-invoice">
+    Non-binding price estimate. Sets linked service orders to `quote` status.
+  </Card>
+  <Card title="Invoice" icon="file-invoice-dollar">
+    Final billing document. Sets orders to `ready` and consumes inventory stock.
+  </Card>
+</CardGroup>
+
+### Type-Specific Behavior
+
+<Tabs>
+  <Tab title="Quote">
+    **Characteristics:**
+    - Does not consume inventory stock
+    - Sets linked orders to `OrderStatus::QUOTE`
+    - Can be converted to invoice later
+    - Used for customer approval
+    
+    ```php
+    if ($documentType === 'quote') {
+        $targetStatus = OrderStatus::QUOTE;
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Invoice">
+    **Characteristics:**
+    - Automatically deducts inventory stock for products
+    - Sets linked orders to `OrderStatus::READY`
+    - Triggers automatic movement records
+    - Final transaction record
+    
+    ```php
+    if ($document->document_type === 'invoice') {
+        $this->consumeInventoryForInvoice($company, $items, $actor);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+See: `app/Services/BillingService.php:59-61`
+
+## Document Sources
+
+Billing documents can be created for three business scenarios:
+
+### Repair (Reparación)
+
+Service-based billing for equipment repairs:
+- **Primary use**: Service orders
+- **Item kind**: `service`
+- **Links to**: Order records
+- **Inventory impact**: None directly
+
+### Sale (Venta)
+
+Product-based billing for direct sales:
+- **Primary use**: Inventory items
+- **Item kind**: `product`
+- **Links to**: Inventory items
+- **Inventory impact**: Stock deduction on invoice
+
+### Mixed (Mixto)
+
+Combined services and products:
+- **Primary use**: Repairs requiring parts
+- **Item kinds**: Both `service` and `product`
+- **Links to**: Orders and inventory
+- **Inventory impact**: Stock deduction for product items
+
+```php
+'source' => ['required', 'in:repair,sale,mixed'],
+```
+
+See: `app/Http/Requests/StoreBillingDocumentRequest.php:45`
+
+## Customer Modes
+
+<Accordion title="Registered Customer">
+  Link document to existing customer record:
+  
+  ```php
+  'customer_mode' => 'registered',
+  'customer_id' => 123,
+  ```
+  
+  **Validation:**
+  ```php
+  $customer = Customer::query()
+      ->where('company_id', $user->company_id)
+      ->find($request->integer('customer_id'));
+      
+  if (!$customer) {
+      abort(422, 'Selected customer does not belong to your company.');
+  }
+  ```
+</Accordion>
+
+<Accordion title="Walk-in Customer">
+  Create on-the-spot customer for immediate service:
+  
+  ```php
+  'customer_mode' => 'walk_in',
+  'walk_in_name' => 'Juan Pérez',
+  ```
+  
+  **Automatic customer creation:**
+  ```php
+  $customer = Customer::create([
+      'company_id' => $company->id,
+      'name' => $walkInName,
+      'email' => sprintf('walkin+%d@%s.local', $document->id, strtolower($company->country)),
+      'phone' => null,
+      'address' => 'Mostrador',
+  ]);
+  ```
+  
+  For walk-in repairs, equipment and service orders are auto-generated with status `delivered`.
+</Accordion>
+
+See: `app/Services/BillingService.php:147-190`
+
+## VAT Calculation
+
+### Tax Modes
+
+ElectroFix supports two VAT calculation methods:
+
+<Tabs>
+  <Tab title="Tax Included">
+    Price already contains VAT (gross pricing):
+    
+    ```php
+    if ($taxMode === 'included') {
+        $lineTotal = round($lineRaw, 2);
+        $lineSubtotal = round($lineTotal / (1 + $vatRate), 2);
+        $lineVat = round($lineTotal - $lineSubtotal, 2);
+    }
+    ```
+    
+    **Example:** Customer pays 121.00
+    - VAT rate: 21%
+    - Subtotal: 100.00 (121.00 ÷ 1.21)
+    - VAT: 21.00
+    - Total: 121.00
+  </Tab>
+  
+  <Tab title="Tax Excluded">
+    Price is net, VAT added on top:
+    
+    ```php
+    else {
+        $lineSubtotal = round($lineRaw, 2);
+        $lineVat = round($lineSubtotal * $vatRate, 2);
+        $lineTotal = round($lineSubtotal + $lineVat, 2);
+    }
+    ```
+    
+    **Example:** Base price 100.00
+    - VAT rate: 21%
+    - Subtotal: 100.00
+    - VAT: 21.00 (100.00 × 0.21)
+    - Total: 121.00
+  </Tab>
+</Tabs>
+
+See: `app/Services/BillingService.php:117-125`
+
+### VAT Rate Source
+
+VAT percentage comes from the company settings:
+
+```php
+$vatRate = ((float) $company->vat_percentage) / 100;
+```
+
+Stored as percentage (e.g., 21) and converted to decimal (0.21) for calculations.
+
+## Line Item Processing
+
+### Item Structure
+
+```php
+[
+    'item_kind' => 'service',           // or 'product'
+    'description' => 'Screen repair',
+    'quantity' => 1.0,
+    'unit_price' => 850.00,
+    'inventory_item_id' => null,        // for products
+    'order_id' => 45,                   // for services
+]
+```
+
+### Calculation Flow
+
+<Steps>
+  <Step title="Validate Item">
+    Ensure products are sale-enabled and orders belong to company:
+    
+    ```php
+    if ($item['item_kind'] === 'product' && $inventoryItemId) {
+        if (!$inventoryItem->is_sale_enabled) {
+            abort(422, 'Product not enabled for sale.');
+        }
+        if ($quantity > $inventoryItem->quantity) {
+            abort(422, 'Quantity exceeds available stock.');
+        }
+    }
+    ```
+  </Step>
+  
+  <Step title="Calculate Line Totals">
+    Apply VAT based on tax mode:
+    
+    ```php
+    $lineRaw = $quantity * $unitPrice;
+    // Then apply tax mode logic
+    ```
+  </Step>
+  
+  <Step title="Accumulate Document Totals">
+    ```php
+    $subtotal += $lineSubtotal;
+    $vatAmount += $lineVat;
+    $total += $lineTotal;
+    ```
+  </Step>
+  
+  <Step title="Store Line Item">
+    ```php
+    BillingDocumentItem::create([
+        'billing_document_id' => $document->id,
+        'description' => $item['description'],
+        'quantity' => $quantity,
+        'unit_price' => $unitPrice,
+        'line_subtotal' => $lineSubtotal,
+        'line_vat' => $lineVat,
+        'line_total' => $lineTotal,
+    ]);
+    ```
+  </Step>
+</Steps>
+
+See: `app/Services/BillingService.php:67-145`
+
+## Document Numbering
+
+Automatic sequential numbering per company:
+
+```php
+private function nextDocumentNumber(Company $company): string
+{
+    $prefix = 'DOC-' . str_pad((string) $company->id, 3, '0', STR_PAD_LEFT) . '-';
+    
+    $last = BillingDocument::query()
+        ->where('company_id', $company->id)
+        ->where('document_number', 'like', $prefix . '%')
+        ->latest('id')
+        ->first();
+    
+    if (!$last) {
+        return $prefix . '000001';
+    }
+    
+    $number = (int) substr($last->document_number, -6);
+    
+    return $prefix . str_pad((string) ($number + 1), 6, '0', STR_PAD_LEFT);
+}
+```
+
+**Format:** `DOC-{company_id}-{sequence}`
+
+**Examples:**
+- First document: `DOC-001-000001`
+- Company 42: `DOC-042-000123`
+- After 999,999: `DOC-001-1000000`
+
+See: `app/Services/BillingService.php:246-263`
+
+## Service Order Integration
+
+### Linking Existing Orders
+
+For registered customers, link to existing service orders:
+
+```php
+if ($item['item_kind'] === 'service' && $orderId) {
+    $order = Order::query()
+        ->where('company_id', $company->id)
+        ->find($orderId);
+    
+    if (!$order) {
+        abort(422, 'Service does not belong to your company.');
+    }
+}
+```
+
+After document creation, update order status:
+
+```php
+$targetStatus = $documentType === 'quote'
+    ? OrderStatus::QUOTE
+    : OrderStatus::READY;
+
+$order->update(['status' => $targetStatus]);
+```
+
+See: `app/Services/BillingService.php:193-214`
+
+### Auto-Generated Orders (Walk-in)
+
+For walk-in service items, orders are created automatically:
+
+```php
+foreach ($items as &$item) {
+    if ($item['item_kind'] !== 'service') {
+        continue;
+    }
+    
+    $order = Order::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'equipment_id' => $equipment->id,
+        'technician' => $actor->name,
+        'symptoms' => $item['description'],
+        'status' => OrderStatus::DELIVERED,
+        'estimated_cost' => $item['line_total'],
+    ]);
+    
+    $item['order_id'] = $order->id;
+}
+```
+
+See: `app/Services/BillingService.php:168-189`
+
+## PDF Generation
+
+Generate downloadable PDFs using DomPDF:
+
+```php
+public function pdf(Request $request, BillingDocument $document)
+{
+    $this->authorizeDocument($request, $document);
+    
+    $document->load(['items.inventoryItem', 'items.order', 'customer', 'company', 'user']);
+    
+    $pdf = Pdf::loadView('worker.billing.pdf', [
+        'document' => $document,
+    ])->setPaper('a4');
+    
+    return $pdf->download($document->document_number . '.pdf');
+}
+```
+
+**Features:**
+- A4 format
+- Filename: `{document_number}.pdf` (e.g., `DOC-001-000123.pdf`)
+- Includes all line items, totals, company and customer info
+
+See: `app/Http/Controllers/Worker/BillingController.php:87-98`
+
+## Validation Rules
+
+From `app/Http/Requests/StoreBillingDocumentRequest.php:41-58`:
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `document_type` | string | Required, `quote` or `invoice` |
+| `source` | string | Required, `repair`, `sale`, or `mixed` |
+| `customer_mode` | string | Required, `registered` or `walk_in` |
+| `customer_id` | integer | Required if `registered` |
+| `walk_in_name` | string | Required if `walk_in`, max 180 |
+| `tax_mode` | string | Required, `included` or `excluded` |
+| `notes` | string | Optional, max 2000 |
+| `items` | array | Required, min 1 item |
+| `items.*.item_kind` | string | `service` or `product` |
+| `items.*.description` | string | Required, max 255 |
+| `items.*.quantity` | numeric | 0.01-999,999 |
+| `items.*.unit_price` | numeric | 0-99,999,999.99 |
+
+### Automatic Item Kind Detection
+
+The request automatically sets `item_kind` based on source:
+
+```php
+protected function prepareForValidation(): void
+{
+    $source = $this->input('source');
+    $items = $this->input('items', []);
+    
+    foreach ($items as $index => $item) {
+        if (!is_array($item) || !empty($item['item_kind'])) {
+            continue;
+        }
+        
+        if ($source === 'sale') {
+            $items[$index]['item_kind'] = 'product';
+        }
+        
+        if ($source === 'repair') {
+            $items[$index]['item_kind'] = 'service';
+        }
+    }
+    
+    $this->merge(['items' => $items]);
+}
+```
+
+See: `app/Http/Requests/StoreBillingDocumentRequest.php:9-33`
+
+## Customer Service Lookup
+
+Fetch available service orders for billing:
+
+```php
+public function customerServices(Request $request, Customer $customer): JsonResponse
+{
+    $orders = Order::query()
+        ->where('company_id', $customer->company_id)
+        ->where('customer_id', $customer->id)
+        ->with('equipment')
+        ->latest()
+        ->get()
+        ->map(function (Order $order) {
+            return [
+                'id' => $order->id,
+                'description' => $order->symptoms ?: 'Service without description',
+                'estimated_cost' => (float) $order->estimated_cost,
+                'status' => $order->status,
+                'status_label' => OrderStatus::label($order->status),
+                'equipment' => trim($order->equipment->brand . ' ' . $order->equipment->model),
+            ];
+        });
+    
+    return response()->json([
+        'customer' => [
+            'id' => $customer->id,
+            'name' => $customer->name,
+            'email' => $customer->email,
+        ],
+        'orders' => $orders,
+    ]);
+}
+```
+
+See: `app/Http/Controllers/Worker/BillingController.php:100-133`
+
+## Relations
+
+Billing documents maintain these relationships:
+
+```php
+public function company(): BelongsTo
+{
+    return $this->belongsTo(Company::class);
+}
+
+public function user(): BelongsTo  // Creator
+{
+    return $this->belongsTo(User::class);
+}
+
+public function customer(): BelongsTo
+{
+    return $this->belongsTo(Customer::class);
+}
+
+public function items(): HasMany
+{
+    return $this->hasMany(BillingDocumentItem::class);
+}
+```
+
+Line items link to:
+
+```php
+public function inventoryItem(): BelongsTo
+{
+    return $this->belongsTo(InventoryItem::class);
+}
+
+public function order(): BelongsTo
+{
+    return $this->belongsTo(Order::class);
+}
+```
+
+See: `app/Models/BillingDocument.php:43-61` and `app/Models/BillingDocumentItem.php:37-50`

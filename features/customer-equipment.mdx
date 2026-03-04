@@ -1,0 +1,452 @@
+---
+title: Customer & Equipment
+description: Manage customer database and track equipment for service orders
+---
+
+The customer and equipment modules form the foundation of ElectroFix AI's service management. Customers own equipment, equipment requires service, and service orders track repair history.
+
+## Customer Management
+
+### Customer Structure
+
+Each customer record contains essential contact information:
+
+```php
+protected $fillable = [
+    'company_id',
+    'name',
+    'email',
+    'phone',
+    'address',
+];
+```
+
+See: `app/Models/Customer.php:14-20`
+
+### Creating Customers
+
+<Tabs>
+  <Tab title="Manual Creation">
+    Workers and admins create customers through the interface:
+    
+    ```php
+    Customer::create([
+        'company_id' => $user->company_id,
+        'name' => 'María González',
+        'email' => 'maria@example.com',
+        'phone' => '+52 33 1234 5678',
+        'address' => 'Av. Revolución 123, Guadalajara',
+    ]);
+    ```
+    
+    See: `app/Http/Controllers/Worker/CustomerController.php:36-44`
+  </Tab>
+  
+  <Tab title="Automatic (Walk-in)">
+    Walk-in billing automatically creates customer records:
+    
+    ```php
+    $customer = Customer::create([
+        'company_id' => $company->id,
+        'name' => $walkInName,
+        'email' => sprintf(
+            'walkin+%d@%s.local', 
+            $document->id, 
+            strtolower($company->country ?: 'mx')
+        ),
+        'phone' => null,
+        'address' => 'Mostrador',
+    ]);
+    ```
+    
+    **Email format:** `walkin+{document_id}@{country}.local`
+    
+    See: `app/Services/BillingService.php:151-157`
+  </Tab>
+</Tabs>
+
+### Validation Rules
+
+From `app/Http/Requests/StoreCustomerRequest.php:14-22`:
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `name` | string | Required, max 255 chars |
+| `email` | string | Required, valid email, max 255 |
+| `phone` | string | Optional, max 50 chars |
+| `address` | string | Optional, max 255 chars |
+
+**Authorization:** Workers, admins, and developers can create customers.
+
+### Customer Search
+
+Find customers by name, email, or phone:
+
+```php
+if ($search = trim($request->query('search'))) {
+    $query->where(function ($q) use ($search) {
+        $q->where('name', 'like', "%{$search}%")
+            ->orWhere('email', 'like', "%{$search}%")
+            ->orWhere('phone', 'like', "%{$search}%");
+    });
+}
+```
+
+See: `app/Http/Controllers/Worker/CustomerController.php:21-27`
+
+### Customer Display Name
+
+Billing documents show appropriate customer names:
+
+```php
+public function customerDisplayName(): string
+{
+    if ($this->customer_mode === 'walk_in') {
+        return $this->walk_in_name ?: 'Cliente de Mostrador';
+    }
+    
+    return $this->customer?->name ?: 'Cliente no disponible';
+}
+```
+
+See: `app/Models/BillingDocument.php:63-70`
+
+## Equipment Management
+
+### Equipment Structure
+
+Equipment records track devices requiring service:
+
+```php
+protected $fillable = [
+    'company_id',
+    'customer_id',
+    'type',           // e.g., "Refrigerador", "Lavadora"
+    'brand',          // e.g., "Samsung", "LG"
+    'model',          // e.g., "RT38K5930SL"
+    'serial_number',  // Optional unique identifier
+];
+```
+
+See: `app/Models/Equipment.php:16-23`
+
+### Creating Equipment
+
+<Tabs>
+  <Tab title="Manual Creation">
+    Link equipment to existing customers:
+    
+    ```php
+    $customer = Customer::findOrFail($request->integer('customer_id'));
+    
+    if ($customer->company_id !== $user->company_id) {
+        abort(403, 'Customer does not belong to your company.');
+    }
+    
+    Equipment::create([
+        'company_id' => $customer->company_id,
+        'customer_id' => $customer->id,
+        'type' => 'Refrigerador',
+        'brand' => 'Samsung',
+        'model' => 'RT38K5930SL',
+        'serial_number' => 'A1B2C3D4',
+    ]);
+    ```
+    
+    See: `app/Http/Controllers/Worker/EquipmentController.php:44-58`
+  </Tab>
+  
+  <Tab title="Automatic (Walk-in)">
+    Walk-in billing creates placeholder equipment:
+    
+    ```php
+    $equipment = Equipment::create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'type' => 'Servicio en Mostrador',
+        'brand' => 'Mostrador',
+        'model' => 'Atención inmediata',
+        'serial_number' => 'WALKIN-' . $document->id,
+    ]);
+    ```
+    
+    **Serial format:** `WALKIN-{document_id}`
+    
+    See: `app/Services/BillingService.php:159-166`
+  </Tab>
+</Tabs>
+
+### Validation Rules
+
+From `app/Http/Requests/StoreEquipmentRequest.php:14-23`:
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `customer_id` | integer | Required, must exist |
+| `type` | string | Required, max 100 chars |
+| `brand` | string | Required, max 100 chars |
+| `model` | string | Optional, max 150 chars |
+| `serial_number` | string | Optional, max 150 chars |
+
+### Equipment Search
+
+<CardGroup cols={3}>
+  <Card title="By Brand" icon="building">
+    ```php
+    where('brand', 'like', "%Samsung%")
+    ```
+  </Card>
+  <Card title="By Model" icon="tag">
+    ```php
+    where('model', 'like', "%RT38K%")
+    ```
+  </Card>
+  <Card title="By Type" icon="box">
+    ```php
+    where('type', 'like', "%Refri%")
+    ```
+  </Card>
+</CardGroup>
+
+Also searches by customer name:
+
+```php
+$equipments->where(function ($q) use ($search) {
+    $q->where('brand', 'like', "%{$search}%")
+        ->orWhere('model', 'like', "%{$search}%")
+        ->orWhere('type', 'like', "%{$search}%")
+        ->orWhereHas('customer', function ($cq) use ($search) {
+            $cq->where('name', 'like', "%{$search}%");
+        });
+});
+```
+
+See: `app/Http/Controllers/Worker/EquipmentController.php:25-34`
+
+## Service History
+
+### Customer Service History
+
+Customers maintain relationships with all their service orders:
+
+```php
+public function orders(): HasMany
+{
+    return $this->hasMany(Order::class);
+}
+```
+
+Example query for customer history:
+
+```php
+$customer = Customer::with([
+    'orders' => function ($query) {
+        $query->latest()->limit(10);
+    },
+    'orders.equipment'
+])->find($customerId);
+```
+
+### Equipment Service History
+
+Equipment tracks all repairs performed:
+
+```php
+public function orders(): HasMany
+{
+    return $this->hasMany(Order::class);
+}
+```
+
+Example query for equipment history:
+
+```php
+$equipment = Equipment::with([
+    'orders' => function ($query) {
+        $query->orderByDesc('created_at');
+    }
+])->find($equipmentId);
+
+foreach ($equipment->orders as $order) {
+    echo $order->symptoms;
+    echo $order->status;
+    echo $order->created_at;
+}
+```
+
+See: `app/Models/Equipment.php:35-38`
+
+### Billing History
+
+Customers link to all billing documents:
+
+```php
+public function billingDocuments(): HasMany
+{
+    return $this->hasMany(BillingDocument::class);
+}
+```
+
+Retrieve customer's invoices:
+
+```php
+$invoices = BillingDocument::query()
+    ->where('customer_id', $customer->id)
+    ->where('document_type', 'invoice')
+    ->with('items')
+    ->latest()
+    ->get();
+```
+
+See: `app/Models/Customer.php:37-40`
+
+## Relations
+
+### Customer Relations
+
+```php
+public function company(): BelongsTo
+{
+    return $this->belongsTo(Company::class);
+}
+
+public function equipments(): HasMany
+{
+    return $this->hasMany(Equipment::class);
+}
+
+public function orders(): HasMany
+{
+    return $this->hasMany(Order::class);
+}
+
+public function billingDocuments(): HasMany
+{
+    return $this->hasMany(BillingDocument::class);
+}
+```
+
+**Relationship hierarchy:**
+- Company → Customers (one-to-many)
+- Customer → Equipment (one-to-many)
+- Customer → Orders (one-to-many)
+- Customer → Billing Documents (one-to-many)
+
+See: `app/Models/Customer.php:22-40`
+
+### Equipment Relations
+
+```php
+public function company(): BelongsTo
+{
+    return $this->belongsTo(Company::class);
+}
+
+public function customer(): BelongsTo
+{
+    return $this->belongsTo(Customer::class);
+}
+
+public function orders(): HasMany
+{
+    return $this->hasMany(Order::class);
+}
+```
+
+**Relationship hierarchy:**
+- Company → Equipment (one-to-many)
+- Customer → Equipment (one-to-many)
+- Equipment → Orders (one-to-many)
+
+See: `app/Models/Equipment.php:25-38`
+
+## Business Rules
+
+### Cross-Company Restrictions
+
+<Accordion title="Customer Isolation">
+  Users can only view and manage customers from their own company:
+  
+  ```php
+  if ($request->user()->role !== 'developer') {
+      $query->where('company_id', $request->user()->company_id);
+  }
+  ```
+  
+  Developers can access all companies.
+</Accordion>
+
+<Accordion title="Equipment-Customer Validation">
+  When creating equipment, customer must belong to user's company:
+  
+  ```php
+  if ($request->user()->role !== 'developer' && 
+      $customer->company_id !== $request->user()->company_id) {
+      abort(403, 'Customer does not belong to your company.');
+  }
+  ```
+</Accordion>
+
+<Accordion title="Order Creation Validation">
+  Customer and equipment must belong to same company:
+  
+  ```php
+  if ($customer->company_id !== $equipment->company_id) {
+      abort(422, 'Customer and equipment must belong to same company.');
+  }
+  ```
+  
+  See: `app/Services/OrderCreationService.php:28-30`
+</Accordion>
+
+## Data Display
+
+### Customer List View
+
+Typical customer listing:
+
+```php
+$customers = Customer::query()
+    ->where('company_id', $user->company_id)
+    ->orderByDesc('created_at')
+    ->paginate(20);
+```
+
+### Equipment with Customer
+
+Show equipment with owner information:
+
+```php
+$equipments = Equipment::query()
+    ->with('customer')
+    ->where('company_id', $user->company_id)
+    ->orderByDesc('created_at')
+    ->paginate(18);
+
+foreach ($equipments as $equipment) {
+    echo $equipment->brand . ' ' . $equipment->model;
+    echo 'Owner: ' . $equipment->customer->name;
+}
+```
+
+See: `app/Http/Controllers/Worker/EquipmentController.php:16-22`
+
+### Order Context Loading
+
+When displaying orders, load related customer and equipment:
+
+```php
+$orders = Order::query()
+    ->with(['customer', 'equipment'])
+    ->where('company_id', $companyId)
+    ->orderByDesc('created_at')
+    ->get();
+
+foreach ($orders as $order) {
+    echo 'Customer: ' . $order->customer->name;
+    echo 'Equipment: ' . $order->equipment->brand . ' ' . $order->equipment->model;
+    echo 'Status: ' . $order->status;
+}
+```
+
+See: `app/Http/Controllers/Worker/OrderController.php:25-27`

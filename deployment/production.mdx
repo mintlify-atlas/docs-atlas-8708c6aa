@@ -1,0 +1,484 @@
+---
+title: "Production Deployment"
+description: "Deploy ElectroFix AI to production with best practices and security considerations"
+---
+
+## Production Deployment Guide
+
+This guide covers deploying ElectroFix AI to a production environment with security, performance, and reliability best practices.
+
+## Pre-Deployment Checklist
+
+### Server Requirements
+
+- **PHP**: 8.2 or higher
+- **Web Server**: Apache 2.4+ or Nginx 1.18+
+- **Database**: MySQL 8.0+ or MariaDB 10.3+
+- **SSL Certificate**: Valid SSL/TLS certificate
+- **Memory**: Minimum 2GB RAM (4GB+ recommended)
+- **Storage**: SSD recommended for database
+
+### PHP Extensions
+
+Ensure all required extensions are installed:
+
+```bash
+php -m | grep -E 'pdo|mysql|mbstring|openssl|json|tokenizer|xml|ctype|bcmath'
+```
+
+## Deployment Steps
+
+### 1. Clone Repository
+
+```bash
+cd /var/www
+git clone <repository-url> electrofix-ai
+cd electrofix-ai
+```
+
+### 2. Install Dependencies
+
+Install production dependencies only:
+
+```bash
+composer install --optimize-autoloader --no-dev
+```
+
+### 3. Environment Configuration
+
+Create production `.env` file:
+
+```bash
+cp .env.example .env
+```
+
+Configure for production:
+
+```env
+APP_NAME="ElectroFix AI"
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://yourdomain.com
+
+APP_KEY=base64:YOUR_32_CHARACTER_KEY_HERE
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=electrofix_production
+DB_USERNAME=electrofix_user
+DB_PASSWORD=STRONG_SECURE_PASSWORD
+
+SESSION_DRIVER=database
+SESSION_LIFETIME=120
+SESSION_SECURE_COOKIE=true
+SESSION_SAME_SITE=strict
+
+CACHE_STORE=database
+QUEUE_CONNECTION=database
+
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.yourdomain.com
+MAIL_PORT=587
+MAIL_USERNAME=your_email@yourdomain.com
+MAIL_PASSWORD=your_email_password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=noreply@yourdomain.com
+MAIL_FROM_NAME="${APP_NAME}"
+
+LOG_CHANNEL=daily
+LOG_LEVEL=warning
+```
+
+### 4. Generate Application Key
+
+```bash
+php artisan key:generate
+```
+
+### 5. Set File Permissions
+
+```bash
+# Set ownership
+sudo chown -R www-data:www-data /var/www/electrofix-ai
+
+# Set directory permissions
+find /var/www/electrofix-ai -type d -exec chmod 755 {} \;
+
+# Set file permissions
+find /var/www/electrofix-ai -type f -exec chmod 644 {} \;
+
+# Storage and cache need write access
+chmod -R 775 storage bootstrap/cache
+```
+
+### 6. Database Setup
+
+Create production database:
+
+```sql
+CREATE DATABASE electrofix_production CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE USER 'electrofix_user'@'localhost' IDENTIFIED BY 'STRONG_SECURE_PASSWORD';
+
+GRANT ALL PRIVILEGES ON electrofix_production.* TO 'electrofix_user'@'localhost';
+
+FLUSH PRIVILEGES;
+```
+
+Run migrations:
+
+```bash
+php artisan migrate --force
+```
+
+<Warning>
+Never run `db:seed` in production unless intentionally adding demo data. Production should start with empty tables.
+</Warning>
+
+### 7. Optimize Application
+
+Cache configuration and routes:
+
+```bash
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+
+### 8. Web Server Configuration
+
+#### Apache Configuration
+
+Create virtual host at `/etc/apache2/sites-available/electrofix-ai.conf`:
+
+```apache
+<VirtualHost *:80>
+    ServerName yourdomain.com
+    ServerAlias www.yourdomain.com
+    Redirect permanent / https://yourdomain.com/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName yourdomain.com
+    ServerAlias www.yourdomain.com
+    
+    DocumentRoot /var/www/electrofix-ai/public
+    
+    <Directory /var/www/electrofix-ai/public>
+        Options -Indexes +FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    
+    ErrorLog ${APACHE_LOG_DIR}/electrofix-error.log
+    CustomLog ${APACHE_LOG_DIR}/electrofix-access.log combined
+    
+    SSLEngine on
+    SSLCertificateFile /path/to/your/certificate.crt
+    SSLCertificateKeyFile /path/to/your/private.key
+    SSLCertificateChainFile /path/to/your/chain.crt
+</VirtualHost>
+```
+
+Enable site and modules:
+
+```bash
+sudo a2ensite electrofix-ai.conf
+sudo a2enmod rewrite ssl
+sudo systemctl reload apache2
+```
+
+#### Nginx Configuration
+
+Create configuration at `/etc/nginx/sites-available/electrofix-ai`:
+
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com www.yourdomain.com;
+    return 301 https://yourdomain.com$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name yourdomain.com www.yourdomain.com;
+    
+    root /var/www/electrofix-ai/public;
+    index index.php;
+    
+    ssl_certificate /path/to/your/certificate.crt;
+    ssl_certificate_key /path/to/your/private.key;
+    
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+    add_header X-XSS-Protection "1; mode=block";
+    
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+    
+    location ~ \.php$ {
+        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+    
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+    
+    access_log /var/log/nginx/electrofix-access.log;
+    error_log /var/log/nginx/electrofix-error.log;
+}
+```
+
+Enable site:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/electrofix-ai /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+## Security Hardening
+
+### Environment File Protection
+
+Ensure `.env` is not accessible:
+
+```bash
+chmod 600 .env
+chown www-data:www-data .env
+```
+
+### Disable Directory Listing
+
+In `.htaccess` or server config:
+
+```apache
+Options -Indexes
+```
+
+### Hide PHP Version
+
+In `php.ini`:
+
+```ini
+expose_php = Off
+```
+
+### Enable HTTPS Only
+
+In `.env`:
+
+```env
+SESSION_SECURE_COOKIE=true
+```
+
+### Database Security
+
+- Use strong, unique passwords
+- Limit database user privileges
+- Enable MySQL secure installation
+- Regular backups
+
+### Application Security
+
+```env
+APP_DEBUG=false
+APP_ENV=production
+```
+
+## Performance Optimization
+
+### OPcache Configuration
+
+In `php.ini`:
+
+```ini
+opcache.enable=1
+opcache.memory_consumption=256
+opcache.interned_strings_buffer=16
+opcache.max_accelerated_files=10000
+opcache.revalidate_freq=60
+opcache.fast_shutdown=1
+```
+
+### Database Optimization
+
+Enable query caching in MySQL:
+
+```sql
+SET GLOBAL query_cache_size = 67108864;
+SET GLOBAL query_cache_type = 1;
+```
+
+Add indexes for frequently queried columns (already included in migrations).
+
+### Composer Optimization
+
+```bash
+composer dump-autoload --optimize --classmap-authoritative
+```
+
+### Queue Workers
+
+Set up supervisor for queue workers:
+
+```ini
+[program:electrofix-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/electrofix-ai/artisan queue:work --sleep=3 --tries=3 --max-time=3600
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+user=www-data
+numprocs=2
+redirect_stderr=true
+stdout_logfile=/var/www/electrofix-ai/storage/logs/worker.log
+stopwaitsecs=3600
+```
+
+Start supervisor:
+
+```bash
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl start electrofix-worker:*
+```
+
+## Backup Strategy
+
+### Database Backups
+
+Daily automated backup:
+
+```bash
+#!/bin/bash
+BACKUP_DIR="/backups/electrofix"
+DATE=$(date +%Y%m%d_%H%M%S)
+
+mkdir -p $BACKUP_DIR
+
+mysqldump -u electrofix_user -p electrofix_production | gzip > $BACKUP_DIR/db_backup_$DATE.sql.gz
+
+# Keep only last 30 days
+find $BACKUP_DIR -name "db_backup_*.sql.gz" -mtime +30 -delete
+```
+
+Add to crontab:
+
+```bash
+0 2 * * * /path/to/backup-script.sh
+```
+
+### File Backups
+
+Backup storage directory:
+
+```bash
+tar -czf /backups/electrofix/storage_$DATE.tar.gz /var/www/electrofix-ai/storage
+```
+
+## Monitoring
+
+### Application Logs
+
+Rotate logs in `.env`:
+
+```env
+LOG_CHANNEL=daily
+```
+
+### Server Monitoring
+
+Monitor:
+- CPU usage
+- Memory usage
+- Disk space
+- Database connections
+- Response times
+
+### Error Tracking
+
+Consider integrating:
+- Sentry
+- Bugsnag
+- Rollbar
+
+## Maintenance Mode
+
+Enable during updates:
+
+```bash
+php artisan down --secret="update-token"
+```
+
+Access via: `https://yourdomain.com/update-token`
+
+Disable after updates:
+
+```bash
+php artisan up
+```
+
+## Updating Application
+
+```bash
+# Enable maintenance mode
+php artisan down
+
+# Pull latest changes
+git pull origin main
+
+# Update dependencies
+composer install --optimize-autoloader --no-dev
+
+# Run migrations
+php artisan migrate --force
+
+# Clear and rebuild cache
+php artisan cache:clear
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+
+# Disable maintenance mode
+php artisan up
+```
+
+## Troubleshooting
+
+### 500 Internal Server Error
+
+1. Check error logs: `storage/logs/laravel.log`
+2. Verify file permissions
+3. Check `.env` configuration
+4. Clear cache
+
+### Database Connection Issues
+
+1. Verify credentials in `.env`
+2. Test database connection
+3. Check firewall rules
+4. Verify MySQL is running
+
+### Performance Issues
+
+1. Enable caching
+2. Optimize database queries
+3. Add indexes
+4. Use queue workers
+5. Monitor server resources
+
+## Next Steps
+
+- [Configuration Guide](/deployment/configuration) - Environment variables reference
+- [Database Migrations](/deployment/migrations) - Database schema details
+- [Local Development](/deployment/local-development) - Development setup

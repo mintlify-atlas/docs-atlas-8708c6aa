@@ -1,0 +1,379 @@
+---
+title: Inventory Management
+description: Track stock levels, manage movements, and receive low stock alerts
+---
+
+The inventory system tracks parts and products used in repairs and sales. It provides real-time stock levels, movement history, and automated notifications for low inventory.
+
+## Inventory Items
+
+### Item Structure
+
+Each inventory item contains:
+
+```php
+protected $fillable = [
+    'company_id',
+    'name',
+    'internal_code',        // Uppercase alphanumeric identifier
+    'quantity',             // Current stock level
+    'low_stock_threshold',  // Alert threshold
+    'is_sale_enabled',      // Can be sold directly
+    'sale_price',           // Price when sold
+];
+```
+
+See: `app/Models/InventoryItem.php:14-22`
+
+### Creating Items
+
+When creating a new inventory item, an initial movement record is automatically generated:
+
+```php
+public function createItem(Company $company, User $actor, array $payload): InventoryItem
+{
+    return DB::transaction(function () use ($company, $actor, $payload) {
+        $item = InventoryItem::create([
+            'company_id' => $company->id,
+            'name' => $payload['name'],
+            'internal_code' => trim(strtoupper($payload['internal_code'])),
+            'quantity' => (int) $payload['quantity'],
+            'low_stock_threshold' => (int) ($payload['low_stock_threshold'] ?? 5),
+            'is_sale_enabled' => (bool) ($payload['is_sale_enabled'] ?? false),
+            'sale_price' => !empty($payload['is_sale_enabled']) 
+                ? ($payload['sale_price'] ?? null) 
+                : null,
+        ]);
+        
+        // Create initial movement record
+        InventoryMovement::create([
+            'inventory_item_id' => $item->id,
+            'company_id' => $company->id,
+            'user_id' => $actor->id,
+            'movement_type' => 'addition',
+            'quantity' => $item->quantity,
+            'stock_before' => 0,
+            'stock_after' => $item->quantity,
+            'notes' => 'Alta inicial de producto',
+        ]);
+        
+        $this->notifyLowStockIfNeeded($item);
+        
+        return $item;
+    });
+}
+```
+
+See: `app/Services/InventoryService.php:15-43`
+
+## Stock Adjustments
+
+### Movement Types
+
+<CardGroup cols={2}>
+  <Card title="Addition" icon="plus">
+    Increase stock (purchases, returns, corrections)
+  </Card>
+  <Card title="Removal" icon="minus">
+    Decrease stock (sales, usage, corrections)
+  </Card>
+</CardGroup>
+
+### Adjustment Process
+
+```php
+public function adjustStock(InventoryItem $item, User $actor, array $payload): InventoryItem
+{
+    return DB::transaction(function () use ($item, $actor, $payload) {
+        $movementType = $payload['movement_type'];
+        $delta = (int) $payload['quantity'];
+        $before = $item->quantity;
+        
+        $after = $movementType === 'addition'
+            ? $before + $delta
+            : $before - $delta;
+        
+        if ($after < 0) {
+            abort(422, 'Cannot remove more units than available stock.');
+        }
+        
+        $item->update(['quantity' => $after]);
+        
+        InventoryMovement::create([
+            'inventory_item_id' => $item->id,
+            'company_id' => $item->company_id,
+            'user_id' => $actor->id,
+            'movement_type' => $movementType,
+            'quantity' => $delta,
+            'stock_before' => $before,
+            'stock_after' => $after,
+            'notes' => $payload['notes'] ?? null,
+        ]);
+        
+        $this->notifyLowStockIfNeeded($item->fresh());
+        
+        return $item->fresh();
+    });
+}
+```
+
+See: `app/Services/InventoryService.php:45-77`
+
+### Validation Rules
+
+From `app/Http/Requests/AdjustInventoryStockRequest.php:15-22`:
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `movement_type` | string | Required, must be `addition` or `removal` |
+| `quantity` | integer | Required, 1-1,000,000 |
+| `notes` | string | Optional, max 255 chars |
+
+**Authorization**: Only users with `inventory` module access can adjust stock.
+
+### Negative Stock Prevention
+
+The system prevents stock from going negative:
+
+```php
+if ($after < 0) {
+    abort(422, 'No puedes retirar más unidades que el stock disponible.');
+}
+```
+
+## Movement History
+
+### Movement Records
+
+Every stock change creates an immutable audit record:
+
+```php
+protected $fillable = [
+    'inventory_item_id',
+    'company_id',
+    'user_id',           // Who made the change
+    'movement_type',     // 'addition' or 'removal'
+    'quantity',          // Amount changed
+    'stock_before',      // Stock level before
+    'stock_after',       // Stock level after
+    'notes',             // Optional reason
+];
+```
+
+See: `app/Models/InventoryMovement.php:13-22`
+
+### Viewing History
+
+Recent movements are displayed on the inventory dashboard:
+
+```php
+$movements = InventoryMovement::query()
+    ->with(['inventoryItem', 'user'])
+    ->where('company_id', $user->company_id)
+    ->latest()
+    ->limit(12)
+    ->get();
+```
+
+See: `app/Http/Controllers/Worker/InventoryController.php:39-44`
+
+## Low Stock Alerts
+
+### Alert Logic
+
+Items are considered low stock when:
+
+```php
+public function isLowStock(): bool
+{
+    return $this->quantity <= $this->low_stock_threshold;
+}
+```
+
+The threshold defaults to **5 units** but can be customized per item.
+
+See: `app/Models/InventoryItem.php:49-52`
+
+### Automatic Notifications
+
+After every stock adjustment, the system checks if notifications should be sent:
+
+```php
+private function notifyLowStockIfNeeded(InventoryItem $item): void
+{
+    if (!$item->isLowStock()) {
+        return;
+    }
+    
+    $usersToNotify = User::query()
+        ->where('company_id', $item->company_id)
+        ->where('is_active', true)
+        ->where(function ($query) {
+            $query->where('role', 'admin')
+                ->orWhere(function ($q) {
+                    $q->where('role', 'worker')
+                        ->where('can_access_inventory', true);
+                });
+        })
+        ->get();
+    
+    foreach ($usersToNotify as $user) {
+        $alreadyExists = $user->notifications()
+            ->where('type', LowStockInventoryNotification::class)
+            ->where('data->item_id', $item->id)
+            ->where('read_at', null)
+            ->exists();
+        
+        if (!$alreadyExists) {
+            $user->notify(new LowStockInventoryNotification($item));
+        }
+    }
+}
+```
+
+**Who gets notified:**
+- All active admins in the company
+- Workers with `can_access_inventory` permission
+
+**Duplicate prevention:** Only sends if user doesn't already have an unread notification for that item.
+
+See: `app/Services/InventoryService.php:79-108`
+
+### Finding Low Stock Items
+
+```php
+public function lowStockItemsForCompany(int $companyId): Collection
+{
+    return InventoryItem::query()
+        ->where('company_id', $companyId)
+        ->whereColumn('quantity', '<=', 'low_stock_threshold')
+        ->orderBy('quantity')
+        ->get();
+}
+```
+
+Ordered by quantity (lowest first) for prioritization.
+
+See: `app/Services/InventoryService.php:110-117`
+
+## Integration with Billing
+
+### Sale-Enabled Items
+
+Only items with `is_sale_enabled = true` can be added to invoices:
+
+```php
+if (!$inventoryItem->is_sale_enabled) {
+    abort(422, sprintf(
+        'Product %s is not enabled for sale.',
+        $inventoryItem->name
+    ));
+}
+```
+
+### Stock Availability Check
+
+Before creating a billing document:
+
+```php
+if ($quantity > $inventoryItem->quantity) {
+    abort(422, sprintf(
+        'Requested quantity for %s exceeds available stock (%d).',
+        $inventoryItem->name,
+        $inventoryItem->quantity
+    ));
+}
+```
+
+See: `app/Services/BillingService.php:89-102`
+
+### Automatic Stock Deduction
+
+When an **invoice** is created (not a quote), inventory is automatically consumed:
+
+```php
+if ($document->document_type === 'invoice') {
+    $this->consumeInventoryForInvoice($company, $items, $actor);
+}
+```
+
+```php
+private function consumeInventoryForInvoice(Company $company, array $items, User $actor): void
+{
+    foreach ($items as $item) {
+        if ($item['item_kind'] !== 'product' || empty($item['inventory_item_id'])) {
+            continue;
+        }
+        
+        $inventory = InventoryItem::query()
+            ->where('company_id', $company->id)
+            ->findOrFail((int) $item['inventory_item_id']);
+        
+        $qtyToDiscount = (int) ceil((float) $item['quantity']);
+        
+        app(InventoryService::class)->adjustStock($inventory, $actor, [
+            'movement_type' => 'removal',
+            'quantity' => $qtyToDiscount,
+            'notes' => 'Descuento por facturación emitida',
+        ]);
+    }
+}
+```
+
+See: `app/Services/BillingService.php:216-244`
+
+## Search Functionality
+
+<Tabs>
+  <Tab title="By Name">
+    ```php
+    $query->where('name', 'like', "%{$search}%")
+    ```
+  </Tab>
+  
+  <Tab title="By Internal Code">
+    ```php
+    $query->where('internal_code', 'like', "%{$search}%")
+    ```
+  </Tab>
+  
+  <Tab title="Combined">
+    ```php
+    if ($search = trim($request->query('search'))) {
+        $query->where(function ($q) use ($search) {
+            $q->where('name', 'like', "%{$search}%")
+                ->orWhere('internal_code', 'like', "%{$search}%");
+        });
+    }
+    ```
+  </Tab>
+</Tabs>
+
+See: `app/Http/Controllers/Worker/InventoryController.php:30-35`
+
+## Relations
+
+Inventory items maintain relationships with:
+
+```php
+public function company(): BelongsTo
+{
+    return $this->belongsTo(Company::class);
+}
+
+public function movements(): HasMany
+{
+    return $this->hasMany(InventoryMovement::class);
+}
+
+public function billingItems(): HasMany
+{
+    return $this->hasMany(BillingDocumentItem::class);
+}
+```
+
+- **Company** - Owner of the inventory
+- **Movements** - Complete audit trail
+- **Billing Items** - Sales and quotes referencing this item
+
+See: `app/Models/InventoryItem.php:34-47`

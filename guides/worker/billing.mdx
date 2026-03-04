@@ -1,0 +1,533 @@
+---
+title: Billing & Invoices (POS)
+description: Complete guide to creating quotes, invoices, and managing billing documents in ElectroFix AI
+---
+
+## Overview
+
+The Billing module is a complete point-of-sale (POS) system for generating quotes and invoices. Create documents for repairs, direct sales, or mixed transactions with automatic VAT calculation, inventory integration, and PDF generation.
+
+<Warning>
+  Access to the Billing module requires the **can_access_billing** permission. Admins have automatic access; workers must be granted permission.
+</Warning>
+
+### What You Can Do
+
+- Generate quotes (Cotizaciones) and invoices (Facturas)
+- Create documents for repairs, sales, or mixed transactions
+- Bill registered customers or walk-in customers
+- Include services from work orders with auto-populated costs
+- Add inventory products with automatic stock deduction
+- Choose VAT included or excluded pricing
+- View document history
+- Generate PDF downloads for customer delivery
+
+## Accessing Billing
+
+Navigate to **Facturación** (Billing) from the main menu. The page shows:
+
+- Company VAT percentage
+- Count of registered customers
+- Count of available inventory products
+- List of all billing documents
+- Search and pagination
+
+## Understanding Document Types
+
+### Cotización (Quote)
+A preliminary estimate provided to customers:
+- Shows proposed costs before work begins
+- Customer can approve or decline
+- Linked service orders update status to "Cotización"
+- Can be converted to invoice later (manually)
+
+### Factura (Invoice)
+A final billing document for completed work:
+- Records actual charges
+- Updates linked service orders to "Listo" (Ready)
+- Customer copy for payment
+- Permanent record for accounting
+
+## Document Source Types
+
+### Reparación (Repair)
+- Services only (no products)
+- Links to work orders
+- Pulls service descriptions and costs from orders
+- Common for repair shops
+
+### Venta (Sale)
+- Products only (no services)
+- Pulls from inventory items
+- Auto-deducts stock when saved
+- Common for parts counter sales
+
+### Mixto (Mixed)
+- Combination of services and products
+- Most flexible option
+- Can bill repair + parts in one document
+- Useful for complete transactions
+
+## Creating a Billing Document
+
+<Steps>
+  <Step title="Open the Billing Form">
+    Click **Nuevo Documento** in the top-right corner. A full-screen modal form appears.
+  </Step>
+
+  <Step title="Select Document Type">
+    Choose **Cotización** or **Factura** using the toggle buttons:
+    - **Cotización**: For estimates and proposals
+    - **Factura**: For final invoices
+    
+    <Note>
+      When services from orders are included, the document type determines the order status update:
+      - Quote → Order status becomes "Cotización"
+      - Invoice → Order status becomes "Listo"
+    </Note>
+  </Step>
+
+  <Step title="Select Source Type">
+    Choose the document source using the centered toggle:
+    - **Venta**: Products from inventory
+    - **Mixto**: Services and products
+    - **Reparación**: Services from orders
+    
+    This determines what columns appear in the line items section.
+  </Step>
+
+  <Step title="Select Customer Mode">
+    Choose **Modo cliente** (Customer Mode):
+    - **Cliente registrado**: Select from your customer database
+    - **Cliente de Mostrador**: Walk-in customer without registration
+  </Step>
+
+  <Step title="Select or Enter Customer">
+    **For Registered Customers**:
+    - Select from the **Cliente registrado** dropdown
+    - System loads their service history if source includes repairs
+    
+    **For Walk-in Customers**:
+    - The **Nombre (mostrador)** field appears
+    - Default value: "Cliente de Mostrador"
+    - Edit if you want to record a name
+  </Step>
+
+  <Step title="Choose VAT Mode">
+    Select **Modo IVA** (VAT Mode):
+    - **Agregar IVA al precio**: VAT added on top of line item prices
+    - **IVA incluido en precio**: VAT already included in prices
+    
+    Your company's VAT percentage (set in Company Settings) applies automatically.
+  </Step>
+
+  <Step title="Review Customer Services (If Applicable)">
+    For **Repair** or **Mixed** documents with registered customers:
+    
+    A card appears showing all orders for this customer:
+    - Order number
+    - Service description
+    - Estimated cost from order
+    - Current order status
+    - Associated equipment
+    
+    You can reference these when adding line items in the next step.
+  </Step>
+
+  <Step title="Add Line Items">
+    Click **Agregar partida** (Add Line Item) to add rows to the invoice.
+    
+    For each line item:
+    
+    **For Mixed source**, select **Tipo** (Type):
+    - **Servicio**: Service/labor charge
+    - **Producto**: Physical product from inventory
+    
+    **For Repair/Mixed with Servicio**:
+    - **Servicio cliente**: Dropdown of customer's orders (optional)
+      - Select "Manual" to enter freely
+      - Select an order to auto-fill description and cost
+    
+    **For Sale/Mixed with Producto**:
+    - **Producto inventario**: Dropdown of sale-enabled inventory
+      - Shows product name, code, and current stock
+      - Out-of-stock items are disabled
+      - Auto-fills description and unit price when selected
+    
+    **Description**: 
+    - Manual entry for services
+    - Auto-filled from product name/code for products
+    - Edit as needed
+    
+    **Cantidad** (Quantity):
+    - Decimal values allowed for services (0.5 hours, etc.)
+    - Integer values for products
+    - Max quantity limited to available stock for products
+    
+    **Precio unitario** (Unit Price):
+    - Manual entry for services
+    - Auto-filled from product sale price
+    - Can override if needed
+    
+    Click the red **Quitar** button to remove a line item.
+  </Step>
+
+  <Step title="Add Notes (Optional)">
+    Enter internal **Notas** (Notes) about the document:
+    - Not printed on customer invoice
+    - Useful for internal tracking
+    - Maximum 2000 characters
+  </Step>
+
+  <Step title="Generate Document">
+    Click **Generar documento** to create the billing record.
+    
+    The system will:
+    - Validate all required fields
+    - Calculate subtotal, VAT, and total
+    - Generate unique document number
+    - Deduct inventory stock for products
+    - Update linked order statuses
+    - Redirect to document view page
+  </Step>
+</Steps>
+
+## Line Item Fields
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| **item_kind** | Yes | 'service' or 'product' (auto-set by source mode) |
+| **description** | Yes | Max 255 characters |
+| **quantity** | Yes | Min 0.01, max 999,999; decimals for services |
+| **unit_price** | Yes | Min 0, max 99,999,999.99 |
+| **inventory_item_id** | Conditional | Required for products |
+| **order_id** | Optional | Links service line to work order |
+
+## Viewing Billing Documents
+
+The main billing page shows all documents in a table:
+
+### Table Columns
+
+**Documento**
+- Unique document number (format: company-specific)
+- Issue date or creation date
+
+**Cliente**  
+- Registered customer name
+- Or walk-in customer name
+
+**Tipo**
+- QUOTE or INVOICE badge
+
+**Origen**
+- REPAIR, SALE, or MIXED badge
+
+**IVA**
+- Mode (INCLUDED or EXCLUDED)
+- VAT percentage applied
+
+**Total**
+- Final document amount with VAT
+
+**Acciones**
+- **Ver**: View full document details
+- **PDF**: Download PDF for customer
+
+## Viewing Document Details
+
+Click **Ver** (View) on any document to see the full breakdown:
+
+- Document header with number and dates
+- Customer information
+- Company information
+- All line items with:
+  - Description
+  - Quantity
+  - Unit price
+  - Line total
+- Subtotal (before VAT)
+- VAT amount
+- Grand total
+- Notes (if any)
+- Linked orders (if any)
+- User who created the document
+
+## Generating PDF Invoices
+
+Click **PDF** on any document to:
+- Generate a formatted PDF invoice
+- Automatically download to your device
+- Filename: `[document_number].pdf`
+
+The PDF includes:
+- Company logo and details (from Company Settings)
+- Customer name and contact
+- Document type and number
+- Itemized line items
+- VAT breakdown
+- Total amount
+- Professional formatting on A4 paper
+
+<Note>
+  PDFs are generated on-demand and not stored permanently. You can download them anytime from the document list or detail page.
+</Note>
+
+## Understanding VAT Calculation
+
+### VAT Excluded (Agregar IVA)
+
+Line item prices do **not** include VAT:
+
+```
+Item 1: $100.00
+Item 2: $50.00
+-----------------
+Subtotal: $150.00
+VAT (16%): $24.00
+-----------------
+Total: $174.00
+```
+
+### VAT Included (IVA incluido)
+
+Line item prices already include VAT:
+
+```
+Item 1: $116.00 (includes VAT)
+Item 2: $58.00 (includes VAT)
+-----------------
+Subtotal: $150.00 (calculated backwards)
+VAT (16%): $24.00 (extracted)
+-----------------
+Total: $174.00
+```
+
+Both modes result in the same total, but the display differs based on your pricing strategy.
+
+## Automatic Stock Management
+
+When a document includes inventory products:
+
+1. **Validation**: System checks sufficient stock exists
+2. **Deduction**: Stock quantity decreases by sold amount
+3. **Movement**: Inventory movement record created:
+   - Type: "removal"
+   - Linked to billing document
+   - Shows user and timestamp
+4. **Alert**: If stock drops below threshold, low-stock notification triggers
+
+<Warning>
+  Stock deductions are immediate and permanent when the document is created. There's no built-in reversal. To undo, manually adjust inventory stock.
+</Warning>
+
+## Order Status Updates
+
+When line items link to work orders:
+
+### For Quotes (Cotización)
+Linked orders update status to **"quote"** automatically.
+
+### For Invoices (Factura)  
+Linked orders update status to **"ready"** automatically.
+
+This integration keeps your workflow in sync with billing.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Choose Correct Document Type">
+    **Use Quotes when**:
+    - Customer hasn't approved work
+    - Providing estimate before repair
+    - Price is subject to change
+    - Customer is shopping around
+    
+    **Use Invoices when**:
+    - Work is complete
+    - Customer has approved charges
+    - Ready for payment collection
+    - Final documentation needed
+  </Accordion>
+  
+  <Accordion title="Understand Your VAT Obligation">
+    Check with your accountant:
+    - **VAT Excluded**: Typical for B2B, allows clear VAT separation
+    - **VAT Included**: Common for retail, shows final consumer price
+    - Ensure method matches legal requirements in your region
+  </Accordion>
+  
+  <Accordion title="Link Services to Orders When Possible">
+    Benefits of linking:
+    - Auto-populates service descriptions
+    - Pre-fills cost estimates
+    - Updates order status automatically
+    - Creates audit trail
+    - Helps track order lifecycle
+  </Accordion>
+  
+  <Accordion title="Use Detailed Descriptions">
+    Write clear line item descriptions:
+    - Include part numbers for products
+    - Specify labor type for services
+    - Note any warranties or guarantees
+    - Add model numbers if relevant
+    
+    Good descriptions reduce customer questions and disputes.
+  </Accordion>
+  
+  <Accordion title="Verify Stock Before Selling Products">
+    Before creating product-heavy invoices:
+    - Check inventory quantities
+    - Ensure stock is physically available
+    - Account for items in pending orders
+    - Restock low items promptly
+  </Accordion>
+  
+  <Accordion title="Keep Notes for Complex Transactions">
+    Use the notes field for:
+    - Special payment arrangements
+    - Warranty information
+    - Follow-up actions needed
+    - Unusual circumstances
+    - Cross-references to other documents
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### Cannot Access Billing Module
+
+**Cause**: User lacks `can_access_billing` permission.
+
+**Solution**:
+- Admins have automatic access
+- Workers: Request admin to grant billing permission  
+- Admin: Edit worker, check "Permitir Facturación"
+
+### Product Not in Dropdown
+
+**Possible Causes**:
+- `is_sale_enabled` is false (not enabled for sale)
+- Product out of stock (quantity = 0)
+- Wrong source mode selected (need Sale or Mixed)
+
+**Solution**:
+1. Go to Inventory
+2. Edit product to enable sale and set price
+3. Ensure stock quantity > 0
+4. Return to billing and refresh
+
+### "Insufficient Stock" Error
+
+**Cause**: Trying to sell more units than available in inventory.
+
+**Solution**:
+- Reduce quantity on line item
+- Check current stock in inventory
+- Receive more stock before completing sale
+- Remove product from this document
+
+### Customer Services Not Loading
+
+**Possible Causes**:
+- Source mode is "Sale" (services not applicable)
+- Customer mode is "Walk-in" (no registered orders)
+- Customer has no orders in system
+- Network error
+
+**Solution**:
+- Verify source is "Repair" or "Mixed"
+- Ensure registered customer is selected
+- Check customer has work orders in system
+- Refresh page and try again
+
+### Cannot Link Order to Service Line
+
+**Cause**: Orders are filtered by selected customer.
+
+**Solution**:
+- Verify correct customer is selected
+- Check that order belongs to this customer
+- Confirm order exists and isn't deleted
+- Use "Manual" if order isn't available
+
+### PDF Generation Fails
+
+**Possible Causes**:
+- Document has been deleted
+- Server error
+- Missing company information
+
+**Solution**:
+- Verify document still exists in list
+- Check company settings are complete
+- Contact admin if issue persists
+- Try viewing document details first
+
+## Technical Reference
+
+### Controller Actions
+
+- **Index**: `GET /worker/billing` - List all billing documents
+- **Store**: `POST /worker/billing` - Create new document with line items
+- **Show**: `GET /worker/billing/{document}` - View document details
+- **PDF**: `GET /worker/billing/{document}/pdf` - Generate and download PDF
+- **Customer Services**: `GET /worker/billing/customers/{customer}/services` - Fetch customer's orders via AJAX
+
+### Data Models
+
+```php
+// BillingDocument
+[
+  'company_id',          // Auto-set to user's company
+  'user_id',             // Creator of document
+  'customer_id',         // Registered customer (nullable)
+  'walk_in_customer_name', // Walk-in name (nullable)
+  'document_type',       // 'quote' or 'invoice'
+  'document_number',     // Unique identifier
+  'source',              // 'repair', 'sale', 'mixed'
+  'tax_mode',            // 'included' or 'excluded'
+  'vat_percentage',      // VAT rate at time of creation
+  'subtotal',            // Before VAT
+  'vat_amount',          // Calculated VAT
+  'total',               // Final amount
+  'notes',               // Internal notes
+  'issued_at',           // Issue timestamp
+]
+
+// BillingDocumentItem (line items)
+[
+  'billing_document_id', // Parent document
+  'item_kind',           // 'service' or 'product'
+  'description',         // Line item description
+  'quantity',            // Units (decimal)
+  'unit_price',          // Price per unit
+  'subtotal',            // quantity * unit_price
+  'inventory_item_id',   // Product reference (nullable)
+  'order_id',            // Service order reference (nullable)
+]
+```
+
+### Document Number Format
+
+Document numbers are generated by `BillingService`:
+- Format varies by implementation
+- Typically: `{PREFIX}-{YEAR}-{SEQUENCE}`
+- Example: `FAC-2026-00123`
+- Sequential and unique per company
+
+### PDF Generation
+
+Uses `Barryvdh\DomPDF` package:
+- Template: `resources/views/worker/billing/pdf.blade.php`
+- Paper: A4
+- Encoding: UTF-8 for international characters
+- Downloads with document number as filename
+
+## Related Features
+
+- [Managing Inventory](/guides/worker/inventory) - Enable products for sale and manage stock
+- [Managing Orders](/guides/worker/orders) - Create work orders to link to billing
+- [Company Settings](/guides/admin/company-settings) - Configure VAT percentage and company details for invoices
+- [Worker Management](/guides/admin/worker-management) - Grant billing permission to workers

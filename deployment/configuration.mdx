@@ -1,0 +1,635 @@
+---
+title: "Configuration Reference"
+description: "Complete reference for all ElectroFix AI environment variables and configuration options"
+---
+
+## Environment Variables
+
+All configuration is done through the `.env` file. Copy `.env.example` to get started.
+
+## Application Configuration
+
+### APP_NAME
+
+**Type**: String  
+**Default**: `Laravel`  
+**Example**: `ElectroFix AI`
+
+The name of your application. Used in emails, notifications, and UI elements.
+
+### APP_ENV
+
+**Type**: String  
+**Default**: `production`  
+**Options**: `local`, `staging`, `production`
+
+The environment your application is running in. Affects error handling and logging behavior.
+
+### APP_DEBUG
+
+**Type**: Boolean  
+**Default**: `false`  
+**Example**: `true` (local), `false` (production)
+
+Enables detailed error messages with stack traces. **Never enable in production.**
+
+### APP_URL
+
+**Type**: URL  
+**Default**: `http://localhost`  
+**Example**: `https://electrofix.yourdomain.com`
+
+The base URL of your application. Used for generating links and redirects.
+
+### APP_KEY
+
+**Type**: String (base64 encoded)  
+**Default**: Empty  
+**Generate**: `php artisan key:generate`
+
+Encryption key for securing sessions and encrypted data. **Must be set before use.**
+
+### APP_LOCALE
+
+**Type**: String  
+**Default**: `en`  
+**Example**: `es` for Spanish
+
+Default language locale for the application.
+
+### APP_FALLBACK_LOCALE
+
+**Type**: String  
+**Default**: `en`
+
+Fallback locale when current locale is not available.
+
+### APP_FAKER_LOCALE
+
+**Type**: String  
+**Default**: `en_US`  
+**Example**: `es_MX` for Mexico
+
+Locale for Faker library (used in testing and seeding).
+
+### APP_MAINTENANCE_DRIVER
+
+**Type**: String  
+**Default**: `file`  
+**Options**: `file`, `cache`
+
+Storage driver for maintenance mode status.
+
+## Database Configuration
+
+### DB_CONNECTION
+
+**Type**: String  
+**Default**: `sqlite`  
+**Options**: `sqlite`, `mysql`, `mariadb`, `pgsql`
+
+Database driver to use.
+
+```env
+# For local development
+DB_CONNECTION=sqlite
+
+# For production
+DB_CONNECTION=mysql
+```
+
+### DB_HOST
+
+**Type**: String  
+**Default**: `127.0.0.1`
+
+Database server hostname.
+
+### DB_PORT
+
+**Type**: Integer  
+**Default**: `3306` (MySQL), `5432` (PostgreSQL)
+
+Database server port.
+
+### DB_DATABASE
+
+**Type**: String  
+**Default**: `laravel` (MySQL), `database.sqlite` (SQLite)
+
+Database name (MySQL/PostgreSQL) or file path (SQLite).
+
+```env
+# MySQL
+DB_DATABASE=electrofix_ai
+
+# SQLite (uses database/database.sqlite)
+# Leave commented when using SQLite
+```
+
+### DB_USERNAME
+
+**Type**: String  
+**Default**: `root`
+
+Database username.
+
+### DB_PASSWORD
+
+**Type**: String  
+**Default**: Empty
+
+Database password.
+
+### DB_FOREIGN_KEYS
+
+**Type**: Boolean  
+**Default**: `true`
+
+Enable foreign key constraints (SQLite only).
+
+## Session Configuration
+
+### SESSION_DRIVER
+
+**Type**: String  
+**Default**: `database`  
+**Options**: `file`, `cookie`, `database`, `memcached`, `redis`, `array`
+
+Where to store session data.
+
+```env
+SESSION_DRIVER=database
+```
+
+### SESSION_LIFETIME
+
+**Type**: Integer (minutes)  
+**Default**: `120`
+
+How long sessions should remain valid (in minutes).
+
+### SESSION_ENCRYPT
+
+**Type**: Boolean  
+**Default**: `false`
+
+Whether to encrypt session data.
+
+### SESSION_PATH
+
+**Type**: String  
+**Default**: `/`
+
+Session cookie path.
+
+### SESSION_DOMAIN
+
+**Type**: String  
+**Default**: `null`
+
+Domain for session cookie. Set to your domain in production.
+
+### SESSION_SECURE_COOKIE
+
+**Type**: Boolean  
+**Default**: `false`  
+**Production**: `true`
+
+Only send cookies over HTTPS. **Must be true in production.**
+
+```env
+# Production
+SESSION_SECURE_COOKIE=true
+```
+
+### SESSION_SAME_SITE
+
+**Type**: String  
+**Default**: `lax`  
+**Options**: `lax`, `strict`, `none`
+
+SameSite cookie attribute for CSRF protection.
+
+## Cache Configuration
+
+### CACHE_STORE
+
+**Type**: String  
+**Default**: `database`  
+**Options**: `file`, `database`, `redis`, `memcached`, `array`
+
+Cache storage driver.
+
+```env
+CACHE_STORE=database
+```
+
+### CACHE_PREFIX
+
+**Type**: String  
+**Default**: Auto-generated from app name
+
+Prefix for cache keys to avoid collisions.
+
+## Queue Configuration
+
+### QUEUE_CONNECTION
+
+**Type**: String  
+**Default**: `database`  
+**Options**: `sync`, `database`, `redis`, `sqs`, `beanstalkd`
+
+Queue driver for background jobs.
+
+```env
+QUEUE_CONNECTION=database
+```
+
+### DB_QUEUE_TABLE
+
+**Type**: String  
+**Default**: `jobs`
+
+Table name for database queue driver.
+
+### DB_QUEUE
+
+**Type**: String  
+**Default**: `default`
+
+Default queue name.
+
+### DB_QUEUE_RETRY_AFTER
+
+**Type**: Integer (seconds)  
+**Default**: `90`
+
+Seconds before retrying failed jobs.
+
+## Mail Configuration
+
+### MAIL_MAILER
+
+**Type**: String  
+**Default**: `log`  
+**Options**: `smtp`, `sendmail`, `ses`, `postmark`, `log`, `array`
+
+Mail driver to use.
+
+```env
+# Development
+MAIL_MAILER=log
+
+# Production
+MAIL_MAILER=smtp
+```
+
+### MAIL_HOST
+
+**Type**: String  
+**Default**: `127.0.0.1`  
+**Example**: `smtp.gmail.com`
+
+SMTP server hostname.
+
+### MAIL_PORT
+
+**Type**: Integer  
+**Default**: `2525`  
+**Common**: `587` (TLS), `465` (SSL), `25` (unencrypted)
+
+SMTP server port.
+
+### MAIL_USERNAME
+
+**Type**: String  
+**Default**: `null`
+
+SMTP authentication username.
+
+### MAIL_PASSWORD
+
+**Type**: String  
+**Default**: `null`
+
+SMTP authentication password.
+
+### MAIL_ENCRYPTION
+
+**Type**: String  
+**Default**: `null`  
+**Options**: `tls`, `ssl`, `null`
+
+SMTP encryption method.
+
+```env
+MAIL_ENCRYPTION=tls
+```
+
+### MAIL_FROM_ADDRESS
+
+**Type**: Email  
+**Default**: `hello@example.com`  
+**Example**: `noreply@electrofix.com`
+
+Default "from" email address.
+
+### MAIL_FROM_NAME
+
+**Type**: String  
+**Default**: `${APP_NAME}`  
+**Example**: `ElectroFix AI`
+
+Default "from" name.
+
+## Logging Configuration
+
+### LOG_CHANNEL
+
+**Type**: String  
+**Default**: `stack`  
+**Options**: `stack`, `single`, `daily`, `stderr`, `syslog`
+
+Logging channel to use.
+
+```env
+# Development
+LOG_CHANNEL=single
+
+# Production
+LOG_CHANNEL=daily
+```
+
+### LOG_STACK
+
+**Type**: String  
+**Default**: `single`
+
+Channels to use when LOG_CHANNEL is `stack`.
+
+### LOG_LEVEL
+
+**Type**: String  
+**Default**: `debug`  
+**Options**: `debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`, `emergency`
+
+Minimum log level to record.
+
+```env
+# Development
+LOG_LEVEL=debug
+
+# Production
+LOG_LEVEL=warning
+```
+
+### LOG_DEPRECATIONS_CHANNEL
+
+**Type**: String  
+**Default**: `null`
+
+Separate channel for deprecation warnings.
+
+## Broadcasting Configuration
+
+### BROADCAST_CONNECTION
+
+**Type**: String  
+**Default**: `log`  
+**Options**: `pusher`, `redis`, `log`, `null`
+
+Broadcasting driver for real-time events.
+
+## Filesystem Configuration
+
+### FILESYSTEM_DISK
+
+**Type**: String  
+**Default**: `local`  
+**Options**: `local`, `public`, `s3`
+
+Default filesystem disk.
+
+### AWS_ACCESS_KEY_ID
+
+**Type**: String  
+**Required for S3**
+
+AWS access key for S3 storage.
+
+### AWS_SECRET_ACCESS_KEY
+
+**Type**: String  
+**Required for S3**
+
+AWS secret key for S3 storage.
+
+### AWS_DEFAULT_REGION
+
+**Type**: String  
+**Default**: `us-east-1`
+
+AWS region for S3 bucket.
+
+### AWS_BUCKET
+
+**Type**: String  
+**Required for S3**
+
+S3 bucket name.
+
+## Redis Configuration
+
+### REDIS_CLIENT
+
+**Type**: String  
+**Default**: `phpredis`  
+**Options**: `phpredis`, `predis`
+
+Redis client library.
+
+### REDIS_HOST
+
+**Type**: String  
+**Default**: `127.0.0.1`
+
+Redis server hostname.
+
+### REDIS_PASSWORD
+
+**Type**: String  
+**Default**: `null`
+
+Redis authentication password.
+
+### REDIS_PORT
+
+**Type**: Integer  
+**Default**: `6379`
+
+Redis server port.
+
+## Security Configuration
+
+### BCRYPT_ROUNDS
+
+**Type**: Integer  
+**Default**: `12`  
+**Range**: 4-31
+
+Number of bcrypt hashing rounds. Higher is more secure but slower.
+
+```env
+# Development (faster)
+BCRYPT_ROUNDS=10
+
+# Production (more secure)
+BCRYPT_ROUNDS=12
+```
+
+## Memcached Configuration
+
+### MEMCACHED_HOST
+
+**Type**: String  
+**Default**: `127.0.0.1`
+
+Memcached server hostname.
+
+### MEMCACHED_PORT
+
+**Type**: Integer  
+**Default**: `11211`
+
+Memcached server port.
+
+### MEMCACHED_USERNAME
+
+**Type**: String  
+**Default**: `null`
+
+Memcached SASL username.
+
+### MEMCACHED_PASSWORD
+
+**Type**: String  
+**Default**: `null`
+
+Memcached SASL password.
+
+## Custom ElectroFix Configuration
+
+<Note>
+ElectroFix AI may use additional environment variables for Stripe, AI providers (OpenAI, Anthropic), and other integrations. Check the application code for service-specific configuration.
+</Note>
+
+### Stripe Configuration (if applicable)
+
+```env
+STRIPE_KEY=pk_test_...
+STRIPE_SECRET=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
+
+### AI Provider Configuration (if applicable)
+
+```env
+OPENAI_API_KEY=sk-...
+OPENAI_ORGANIZATION=org-...
+
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+## Configuration Files
+
+Configuration files are located in the `config/` directory:
+
+- **`config/app.php`** - Application settings (name, locale, timezone, providers)
+- **`config/auth.php`** - Authentication guards and providers
+- **`config/cache.php`** - Cache stores and drivers
+- **`config/database.php`** - Database connections
+- **`config/filesystems.php`** - File storage disks
+- **`config/mail.php`** - Mail configuration and mailers
+- **`config/queue.php`** - Queue connections and failed jobs
+- **`config/services.php`** - Third-party service credentials
+- **`config/session.php`** - Session driver and settings
+
+## Environment-Specific Examples
+
+### Local Development (SQLite)
+
+```env
+APP_ENV=local
+APP_DEBUG=true
+APP_URL=http://localhost:8000
+
+DB_CONNECTION=sqlite
+
+SESSION_DRIVER=database
+CACHE_STORE=database
+QUEUE_CONNECTION=database
+
+MAIL_MAILER=log
+LOG_LEVEL=debug
+```
+
+### Local Development (MySQL)
+
+```env
+APP_ENV=local
+APP_DEBUG=true
+APP_URL=http://localhost:8000
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=electrofix_local
+DB_USERNAME=root
+DB_PASSWORD=
+
+SESSION_DRIVER=database
+CACHE_STORE=database
+QUEUE_CONNECTION=database
+
+MAIL_MAILER=log
+LOG_LEVEL=debug
+```
+
+### Production
+
+```env
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://electrofix.yourdomain.com
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=electrofix_production
+DB_USERNAME=electrofix_user
+DB_PASSWORD=STRONG_SECURE_PASSWORD
+
+SESSION_DRIVER=database
+SESSION_SECURE_COOKIE=true
+SESSION_SAME_SITE=strict
+
+CACHE_STORE=database
+QUEUE_CONNECTION=database
+
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.yourdomain.com
+MAIL_PORT=587
+MAIL_USERNAME=noreply@yourdomain.com
+MAIL_PASSWORD=your_smtp_password
+MAIL_ENCRYPTION=tls
+
+LOG_CHANNEL=daily
+LOG_LEVEL=warning
+```
+
+## Next Steps
+
+- [Local Development Setup](/deployment/local-development) - Set up development environment
+- [Production Deployment](/deployment/production) - Deploy to production
+- [Database Migrations](/deployment/migrations) - Database schema reference

@@ -1,0 +1,281 @@
+---
+title: Managing Customers
+description: Complete guide to creating and managing customer records in ElectroFix AI
+---
+
+## Overview
+
+The Customers module maintains your company's customer database. Each customer record stores contact information and serves as the foundation for equipment registration and work orders.
+
+### What You Can Do
+
+- Register new customers with contact details
+- Search existing customer records
+- View customer information in a sortable table
+- Link customers to equipment and orders
+
+## Accessing the Customer List
+
+Navigate to **Clientes** (Customers) from the main menu. The customer list displays:
+
+- Total customer count badge
+- Search functionality
+- Paginated table view showing all customer records
+- Quick access to create new customers
+
+## Creating a New Customer
+
+<Steps>
+  <Step title="Open the Customer Form">
+    Click the **Nuevo Cliente** button in the top-right corner. A modal dialog will appear.
+  </Step>
+
+  <Step title="Enter Customer Name">
+    Fill in the **Nombre** (Name) field:
+    - Required field
+    - Maximum 255 characters
+    - Full legal or business name recommended
+    
+    **Example**: "Juan Carlos Méndez" or "Electrónica del Valle S.A."
+  </Step>
+
+  <Step title="Enter Email Address">
+    Provide the customer's **Correo** (Email):
+    - Required field
+    - Must be valid email format
+    - Maximum 255 characters
+    - Used for communications and document delivery
+    
+    **Example**: "juan.mendez@example.com"
+  </Step>
+
+  <Step title="Add Phone Number (Optional)">
+    Enter the customer's **Teléfono** (Phone):
+    - Optional field
+    - Maximum 50 characters
+    - Include country code for international numbers
+    
+    **Example**: "+52 555 1234 5678"
+  </Step>
+
+  <Step title="Add Address (Optional)">
+    Enter the customer's **Dirección** (Address):
+    - Optional field
+    - Maximum 255 characters
+    - Helpful for equipment pickup/delivery
+    
+    **Example**: "Av. Reforma 123, Col. Centro, CDMX"
+  </Step>
+
+  <Step title="Save the Customer">
+    Click **Guardar Cliente** to create the customer record. The system will:
+    - Validate all required fields
+    - Auto-assign the customer to your company
+    - Display success confirmation
+    - Add the customer to the list immediately
+  </Step>
+</Steps>
+
+## Customer Form Fields
+
+| Field | Required | Type | Max Length | Validation |
+|-------|----------|------|------------|------------|
+| **Nombre** (Name) | Yes | Text | 255 | Cannot be empty |
+| **Correo** (Email) | Yes | Email | 255 | Must be valid email format |
+| **Teléfono** (Phone) | No | Text | 50 | Free format |
+| **Dirección** (Address) | No | Text | 255 | Free format |
+
+<Note>
+  The `company_id` is automatically set to your company when creating a customer. You can only see and manage customers belonging to your company.
+</Note>
+
+## Viewing the Customer List
+
+The customer table displays the following columns:
+
+### Cliente (Customer)
+The customer's full name as entered in the system.
+
+### Contacto (Contact)
+- **Email**: Primary email address
+- **Phone**: Phone number (displays "Sin teléfono" if not provided)
+
+### Ubicación (Location)
+The customer's address (displays "Sin dirección" if not provided).
+
+### Registro (Registration Date)
+Date when the customer was created in the system, formatted as `YYYY-MM-DD`.
+
+## Searching for Customers
+
+Use the search bar to quickly find customer records. The search performs partial matching on:
+
+- **Customer Name**: Finds customers whose name contains the search term
+- **Email Address**: Matches email addresses containing the search term  
+- **Phone Number**: Finds phone numbers containing the search term
+
+<Steps>
+  <Step title="Enter Search Term">
+    Type your search query in the search input field. You can search by:
+    - Full or partial name: "Juan", "Méndez", "Carlos"
+    - Email or domain: "juan@", "example.com"
+    - Phone digits: "555", "1234"
+  </Step>
+
+  <Step title="Execute Search">
+    Click the **Buscar** button or press Enter.
+  </Step>
+
+  <Step title="View Results">
+    The table will update to show only matching customers. The customer count badge reflects filtered results.
+  </Step>
+
+  <Step title="Clear Search">
+    Clear the search field and click **Buscar** again to view all customers.
+  </Step>
+</Steps>
+
+## Pagination
+
+Customer records are paginated for performance:
+
+- **Records per page**: 20 customers
+- **Sort order**: Newest customers first (`created_at DESC`)
+- **Navigation**: Use the pagination controls at the bottom of the table
+
+Search results maintain pagination, showing the count of filtered records.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Consistent Name Formatting">
+    Establish a naming convention for your team:
+    - **Individuals**: "First Last" or "Last, First"
+    - **Businesses**: Include legal entity type (S.A., LLC, etc.)
+    - **Avoid abbreviations** unless official company name
+    
+    Consistent formatting improves searchability and professionalism.
+  </Accordion>
+  
+  <Accordion title="Always Collect Email Addresses">
+    Email is required because it's used for:
+    - Sending invoices and quotes
+    - Order status notifications
+    - Digital receipt delivery
+    
+    If the customer doesn't have email, consider creating a generic company email for walk-in customers.
+  </Accordion>
+  
+  <Accordion title="Verify Contact Information">
+    Double-check contact details when creating records:
+    - Confirm email spelling to avoid delivery failures
+    - Verify phone numbers for callback accuracy
+    - Ask customers to confirm their information
+  </Accordion>
+  
+  <Accordion title="Add Notes in Address Field">
+    Use the address field for helpful details:
+    - Delivery preferences
+    - Cross-streets or landmarks
+    - Building or apartment numbers
+    - Contact person for businesses
+  </Accordion>
+</AccordionGroup>
+
+## Integration with Other Modules
+
+### Equipment Management
+Once a customer is created, you can:
+- Register equipment owned by this customer
+- Link multiple equipment items to one customer
+- View all equipment associated with a customer
+
+### Work Orders
+Customer records enable:
+- Creating repair orders for customer equipment
+- Tracking service history per customer
+- Auto-populating customer details in orders
+
+### Billing
+Customers can be used in billing documents:
+- **Registered customer mode**: Select from customer list for invoices/quotes
+- **Walk-in customer mode**: Use generic "Cliente de Mostrador" for one-time sales
+- Customer email receives PDF invoices
+
+## Troubleshooting
+
+### Email Already Exists Error
+
+**Issue**: Customer email addresses must be unique within the system.
+
+**Solutions**:
+- Check if customer already exists using search
+- Use a variant email if customer has multiple addresses (e.g., personal vs. business)
+- For duplicate walk-in customers, append a number: "walkin+1@yourshop.com"
+
+### Cannot Find Customer in Search
+
+**Possible Causes**:
+- Customer belongs to a different company (you can only see your company's customers)
+- Typo in search term
+- Customer name/email doesn't match search query
+
+**Solutions**:
+- Try partial searches with fewer characters
+- Search by different fields (name, email, phone)
+- Check if you're logged into the correct company account
+
+### Missing Customer in Equipment/Order Dropdowns
+
+**Cause**: Dropdowns only show customers from your company.
+
+**Solution**: 
+1. Verify customer was created successfully
+2. Refresh the page to reload customer data
+3. Check that you're logged in with the same company account
+
+## Technical Reference
+
+### Controller Actions
+
+- **Index**: `GET /worker/customers` - List all customers with search and pagination
+- **Store**: `POST /worker/customers` - Create new customer record
+
+### Data Model
+
+```php
+[
+  'name',       // Customer full name (required, max 255)
+  'email',      // Email address (required, max 255, valid email)
+  'phone',      // Phone number (optional, max 50)
+  'address',    // Physical address (optional, max 255)
+  'company_id', // Auto-set to authenticated user's company
+]
+```
+
+### Company Scoping
+
+All customer queries are automatically filtered by `company_id`:
+- Workers and admins only see their company's customers
+- Developers can see all customers across companies
+- Customer IDs are globally unique but company-scoped for security
+
+### Search Implementation
+
+The search uses Laravel's query builder with `LIKE` matching:
+
+```php
+->where(function ($q) use ($search) {
+    $q->where('name', 'like', "%{$search}%")
+      ->orWhere('email', 'like', "%{$search}%")
+      ->orWhere('phone', 'like', "%{$search}%");
+})
+```
+
+Searches are case-insensitive and match partial strings.
+
+## Related Features
+
+- [Managing Equipment](/guides/worker/equipment) - Register equipment for customers
+- [Managing Orders](/guides/worker/orders) - Create repair orders for customer equipment
+- [Billing & Invoices](/guides/worker/billing) - Generate invoices for registered customers

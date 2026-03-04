@@ -1,0 +1,477 @@
+---
+title: "Database Seeders"
+description: "Reference for ElectroFix AI database seeders and demo data structure"
+---
+
+## Overview
+
+Seeders populate the database with demo data for development and testing. They create sample companies, users, customers, inventory, and transactions.
+
+<Warning>
+Never run seeders in production unless you specifically want demo data. Seeders are for development and testing only.
+</Warning>
+
+## Running Seeders
+
+### Run All Seeders
+
+```bash
+php artisan db:seed
+```
+
+### Run Specific Seeder
+
+```bash
+php artisan db:seed --class=CompanySeeder
+```
+
+### Fresh Migration with Seeding
+
+```bash
+php artisan migrate:fresh --seed
+```
+
+## Seeder Execution Order
+
+Seeders run in the following order (defined in `DatabaseSeeder.php`):
+
+1. **CompanySeeder** - Creates demo companies
+2. **UserSeeder** - Creates test users
+3. **SubscriptionSeeder** - Creates company subscriptions
+4. **OperationalDataSeeder** - Creates customers, equipment, and orders
+5. **InventorySeeder** - Creates inventory items
+6. **BillingSeeder** - Creates billing documents
+
+## Seeder Files
+
+All seeders are located in `database/seeders/`.
+
+### DatabaseSeeder.php
+
+Main seeder that orchestrates all other seeders.
+
+**File**: `database/seeders/DatabaseSeeder.php`
+
+**Execution Order**:
+```php
+$this->call([
+    CompanySeeder::class,
+    UserSeeder::class,
+    SubscriptionSeeder::class,
+    OperationalDataSeeder::class,
+    InventorySeeder::class,
+    BillingSeeder::class,
+]);
+```
+
+## CompanySeeder
+
+Creates two demo companies for testing multi-tenancy.
+
+**File**: `database/seeders/CompanySeeder.php`
+
+**Companies Created**:
+
+### 1. ElectroFix Cliente Demo
+
+Main demo company for client simulation.
+
+**Data**:
+- **Name**: ElectroFix Cliente Demo
+- **Owner**: Carlos Mendoza
+- **Email**: owner@cliente-demo.com
+- **Phone**: +52 55 1000 1000
+- **Tax ID**: RFC123456AB1
+- **Billing Email**: billing@cliente-demo.com
+- **Billing Phone**: +52 55 1000 1001
+- **Address**: Av. Reforma 100, CDMX, CDMX, 06600, MX
+- **Currency**: MXN
+- **VAT**: 16%
+- **Notes**: "Empresa demo principal para entorno local."
+
+### 2. ElectroFix Developer Lab
+
+Development and testing company.
+
+**Data**:
+- **Name**: ElectroFix Developer Lab
+- **Owner**: ElectroFix Platform Team
+- **Email**: dev-owner@electrofix.ai
+- **Phone**: +52 55 2000 2000
+- **Tax ID**: RFCDEV1234X9
+- **Billing Email**: dev-billing@electrofix.ai
+- **Billing Phone**: +52 55 2000 2001
+- **Address**: Innovation Park 42, Monterrey, NL, 64000, MX
+- **Currency**: MXN
+- **VAT**: 16%
+- **Notes**: "Empresa fija para pruebas de developer."
+
+**Idempotent**: Uses `updateOrCreate()` to avoid duplicates on re-seeding.
+
+## UserSeeder
+
+Creates three test users with different roles and permissions.
+
+**File**: `database/seeders/UserSeeder.php`
+
+**Users Created**:
+
+### 1. Admin User
+
+**Credentials**:
+- **Email**: admin@electrofix.ai
+- **Password**: password123
+- **Name**: Admin ElectroFix
+
+**Permissions**:
+- **Company**: ElectroFix Cliente Demo
+- **Role**: admin
+- **Active**: true
+- **Access Billing**: true
+- **Access Inventory**: true
+
+**Use Case**: Full access for administrative tasks and testing.
+
+### 2. Worker User
+
+**Credentials**:
+- **Email**: worker@electrofix.ai
+- **Password**: password123
+- **Name**: Worker ElectroFix
+
+**Permissions**:
+- **Company**: ElectroFix Cliente Demo
+- **Role**: worker
+- **Active**: true
+- **Access Billing**: false
+- **Access Inventory**: true
+
+**Use Case**: Testing role-based access control with limited permissions.
+
+### 3. Developer User
+
+**Credentials**:
+- **Email**: developer@electrofix.ai
+- **Password**: password123
+- **Name**: Developer ElectroFix
+
+**Permissions**:
+- **Company**: ElectroFix Developer Lab
+- **Role**: developer
+- **Active**: true
+- **Access Billing**: true
+- **Access Inventory**: true
+
+**Use Case**: Testing and development with separate company context.
+
+<Note>
+All passwords are hashed using Laravel's bcrypt. The plain text "password123" is shown here for testing purposes only.
+</Note>
+
+## SubscriptionSeeder
+
+Creates active subscriptions for both demo companies.
+
+**File**: `database/seeders/SubscriptionSeeder.php`
+
+**Subscriptions Created**:
+
+### 1. ElectroFix Cliente Demo Subscription
+
+**Data**:
+- **Plan**: pro
+- **Status**: active
+- **Starts**: Beginning of current month
+- **Ends**: End of next month
+- **Billing Cycle**: monthly
+- **User Limit**: 25 users
+
+### 2. ElectroFix Developer Lab Subscription
+
+**Data**:
+- **Plan**: developer_test
+- **Status**: active
+- **Starts**: Beginning of current month
+- **Ends**: One year from now
+- **Billing Cycle**: yearly
+- **User Limit**: 999 users
+
+**Notes**: Developer subscription has extended expiration and higher user limit for testing.
+
+## OperationalDataSeeder
+
+Creates customers, equipment, and repair orders with AI diagnostics.
+
+**File**: `database/seeders/OperationalDataSeeder.php`
+
+**Data Created**:
+
+### Customers (3 total)
+
+#### For ElectroFix Cliente Demo:
+
+1. **Empresa Norte**
+   - Email: cliente1@demo.com
+   - Phone: +52 55 3000 1000
+   - Address: CDMX, México
+
+2. **Cadena Sur**
+   - Email: cliente2@demo.com
+   - Phone: +52 55 3000 2000
+   - Address: Puebla, México
+
+#### For ElectroFix Developer Lab:
+
+3. **Developer Lab Client**
+   - Email: lab@electrofix.ai
+   - Phone: +52 55 5555 5555
+   - Address: Monterrey, México
+
+### Equipment (3 total)
+
+#### For Cliente Demo:
+
+1. **Washing Machine**
+   - Serial: EF-LAV-001
+   - Customer: Empresa Norte
+   - Type: Lavadora
+   - Brand: Samsung
+   - Model: WF45R6100
+
+2. **Refrigerator**
+   - Serial: EF-REF-002
+   - Customer: Cadena Sur
+   - Type: Refrigerador
+   - Brand: LG
+   - Model: GR-X24
+
+#### For Developer Lab:
+
+3. **Microwave**
+   - Serial: DEV-TEST-001
+   - Customer: Developer Lab Client
+   - Type: Microondas
+   - Brand: Whirlpool
+   - Model: WMX20
+
+### Orders (2 total)
+
+#### Order 1: Washing Machine Diagnostic
+
+**Basic Info**:
+- **Company**: ElectroFix Cliente Demo
+- **Customer**: Empresa Norte
+- **Equipment**: Samsung WF45R6100 (EF-LAV-001)
+- **Technician**: Operador A
+- **Status**: diagnostic
+- **Estimated Cost**: $1,500 MXN
+
+**Symptoms**:
+"No enciende y presenta ruido intermitente"
+
+**AI Diagnosis**:
+- **Potential Causes**: 
+  - Falla en fuente de alimentación
+  - Posible desgaste mecánico
+- **Estimated Time**: 3-5 horas
+- **Suggested Parts**:
+  - Tarjeta electrónica
+  - Rodamientos
+- **Technical Advice**: "Verificar voltajes y continuidad antes de cambiar componentes."
+
+#### Order 2: Refrigerator Quote
+
+**Basic Info**:
+- **Company**: ElectroFix Cliente Demo
+- **Customer**: Cadena Sur
+- **Equipment**: LG GR-X24 (EF-REF-002)
+- **Technician**: Operador B
+- **Status**: quote
+- **Estimated Cost**: $900 MXN
+
+**Symptoms**:
+"Fuga de agua por la parte inferior"
+
+**AI Diagnosis**:
+- **Potential Causes**:
+  - Deterioro en sellos
+  - Falla en manguera de drenaje
+- **Estimated Time**: 1-2 horas
+- **Suggested Parts**:
+  - Kit de sellos
+  - Manguera de drenaje
+- **Technical Advice**: "Confirmar presión y estado de juntas antes del reemplazo."
+
+## InventorySeeder
+
+Creates inventory items for parts and supplies.
+
+**File**: `database/seeders/InventorySeeder.php`
+
+**Items Created**:
+
+### For ElectroFix Cliente Demo (4 items):
+
+1. **Capacitor 25uF**
+   - Code: REF-CAP-25
+   - Quantity: 18 units
+   - Low Stock Threshold: 8 units
+   - Sale Enabled: No
+   - Sale Price: N/A
+
+2. **Tarjeta Control Universal**
+   - Code: REF-TCU-110
+   - Quantity: 4 units
+   - Low Stock Threshold: 5 units (BELOW THRESHOLD)
+   - Sale Enabled: Yes
+   - Sale Price: $1,450.00 MXN
+
+3. **Bomba de Drenaje**
+   - Code: REF-BDR-22
+   - Quantity: 10 units
+   - Low Stock Threshold: 4 units
+   - Sale Enabled: Yes
+   - Sale Price: $780.00 MXN
+
+4. **Kit de Sellos**
+   - Code: REF-KSE-09
+   - Quantity: 3 units
+   - Low Stock Threshold: 4 units (BELOW THRESHOLD)
+   - Sale Enabled: Yes
+   - Sale Price: $320.00 MXN
+
+### For ElectroFix Developer Lab (1 item):
+
+5. **Módulo de prueba laboratorio**
+   - Code: DEV-LAB-001
+   - Quantity: 12 units
+   - Low Stock Threshold: 2 units
+   - Sale Enabled: No
+   - Sale Price: N/A
+
+**Low Stock Alerts**: Items 2 and 4 are below threshold for testing alert functionality.
+
+## BillingSeeder
+
+Creates sample billing documents with line items.
+
+**File**: `database/seeders/BillingSeeder.php`
+
+**Documents Created**:
+
+### Billing Document 1: Mixed Quote
+
+**Header**:
+- **Company**: ElectroFix Cliente Demo
+- **Document Number**: DOC-001-000001
+- **Type**: quote
+- **Created By**: Admin ElectroFix
+- **Customer**: Empresa Norte (registered customer)
+- **Source**: mixed (service + product)
+- **Tax Mode**: excluded (tax calculated separately)
+- **VAT Rate**: 16%
+- **Issued**: Current timestamp
+
+**Line Items**:
+
+1. **Service Item**
+   - Kind: service
+   - Description: "Diagnóstico técnico inicial"
+   - Quantity: 1
+   - Unit Price: $600.00
+   - Subtotal: $600.00
+   - VAT: $96.00
+   - Total: $696.00
+
+2. **Product Item** (from inventory)
+   - Kind: product
+   - Description: Capacitor 25uF (from inventory)
+   - Inventory Item: REF-CAP-25
+   - Quantity: 1
+   - Unit Price: $400.00
+   - Subtotal: $400.00
+   - VAT: $64.00
+   - Total: $464.00
+
+**Document Totals**:
+- Subtotal: $1,000.00
+- VAT (16%): $160.00
+- **Total: $1,160.00 MXN**
+
+**Notes**: "Documento demo de facturación."
+
+## Seeder Features
+
+### Idempotency
+
+All seeders use `updateOrCreate()` instead of `create()`, making them safe to run multiple times:
+
+```php
+Company::query()->updateOrCreate(
+    ['name' => 'ElectroFix Cliente Demo'], // Find by
+    [...] // Update or insert with this data
+);
+```
+
+### Relationships
+
+Seeders maintain referential integrity:
+- Users belong to companies
+- Customers belong to companies
+- Equipment belongs to customers and companies
+- Orders reference customers, equipment, and companies
+- Inventory items belong to companies
+- Billing documents reference users, customers, and companies
+
+### Multi-Tenancy Testing
+
+Two separate companies allow testing:
+- Data isolation
+- Cross-tenant query protection
+- Company-specific features
+- Subscription plan differences
+
+### Real-World Scenarios
+
+Demo data includes:
+- Low stock alerts (items below threshold)
+- Different order statuses (diagnostic, quote)
+- AI diagnostics with JSON data
+- Mixed billing (services + products)
+- Tax calculations
+- Multi-currency support (MXN)
+
+## Resetting Demo Data
+
+To reset to fresh demo data:
+
+```bash
+php artisan migrate:fresh --seed
+```
+
+<Warning>
+This will DROP all tables and recreate them with fresh demo data. All existing data will be lost.
+</Warning>
+
+## Custom Seeding
+
+To create your own seeder:
+
+```bash
+php artisan make:seeder YourSeeder
+```
+
+Add to `DatabaseSeeder.php`:
+
+```php
+$this->call([
+    // ... existing seeders
+    YourSeeder::class,
+]);
+```
+
+## Next Steps
+
+- [Database Migrations](/deployment/migrations) - Understand database schema
+- [Local Development](/deployment/local-development) - Set up development environment
+- [Configuration Guide](/deployment/configuration) - Environment configuration

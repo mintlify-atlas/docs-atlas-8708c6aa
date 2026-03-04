@@ -1,0 +1,347 @@
+---
+title: 'Order Creation Service'
+description: 'Create service orders with optional AI diagnostic integration'
+---
+
+## Overview
+
+The `OrderCreationService` creates service orders with optional AI-powered diagnostic analysis. It handles customer/equipment validation, AI usage quota checking, diagnostic analysis, and usage tracking.
+
+**Namespace:** `App\Services\OrderCreationService`
+
+**Dependencies:**
+- `AiDiagnosticService` - Performs symptom analysis
+- `AiUsageService` - Manages AI quota and tracking
+- `AiTokenEstimator` - Estimates token consumption
+
+---
+
+## Methods
+
+### create
+
+Creates a new service order with optional AI diagnostic analysis.
+
+```php
+public function create(User $actor, array $payload): array
+```
+
+#### Parameters
+
+<ParamField path="actor" type="User" required>
+  The user creating the order
+</ParamField>
+
+<ParamField path="payload" type="array" required>
+  Order configuration array with the following structure:
+
+  ```php
+  [
+      'customer_id' => int,                  // Required
+      'equipment_id' => int,                 // Required
+      'symptoms' => string | null,           // Equipment issue description
+      'status' => string,                    // OrderStatus constant (default: RECEIVED)
+      'estimated_cost' => float,             // Initial cost estimate (default: 0)
+      'request_ai_diagnosis' => bool,        // Request AI analysis (default: false)
+      'technician' => string,                // For developer role
+      'technician_user_id' => int,           // For admin role
+  ]
+  ```
+</ParamField>
+
+#### Returns
+
+Returns an associative array:
+
+```php
+[
+    'order' => Order,              // The created/updated order model
+    'ai_applied' => bool,          // Whether AI diagnostic was applied
+    'ai_warning' => string | null, // Error message if AI was blocked or failed
+]
+```
+
+#### Behavior
+
+**Validation:**
+1. Verifies customer and equipment exist
+2. Ensures customer and equipment belong to same company
+3. Checks actor permissions (workers can only create in their company)
+4. Prevents multiple AI diagnostics on same order
+
+**Technician Assignment:**
+- **Worker role**: Automatically assigned as technician
+- **Admin role**: Must specify `technician_user_id` from active company workers/admins
+- **Developer role**: Can specify custom technician name or uses actor name
+
+**AI Diagnostic Flow:**
+
+If `request_ai_diagnosis` is true:
+1. Checks if order already has AI diagnostic
+2. Validates company plan supports AI
+3. Checks monthly query quota
+4. Estimates and validates token usage
+5. Performs diagnostic analysis
+6. Validates actual token consumption
+7. Updates order with AI results
+8. Records usage in tracking table
+
+**AI Usage Blocking:**
+
+If AI quota is exceeded or plan doesn't support AI:
+- Order is still created without AI data
+- Returns `ai_applied: false` with warning message
+- Logs blocked attempt in `company_ai_usage` table
+
+#### Example Usage
+
+**Basic Order Creation:**
+
+```php
+use App\Services\OrderCreationService;
+use App\Support\OrderStatus;
+
+$orderService = app(OrderCreationService::class);
+
+$result = $orderService->create(
+    actor: $user,
+    payload: [
+        'customer_id' => 123,
+        'equipment_id' => 456,
+        'symptoms' => 'La lavadora no enciende y hace ruido al girar',
+        'status' => OrderStatus::RECEIVED,
+        'estimated_cost' => 0,
+        'request_ai_diagnosis' => false,
+    ]
+);
+
+$order = $result['order'];
+echo "Order created: #{$order->id}";
+```
+
+**Order with AI Diagnostic:**
+
+```php
+$result = $orderService->create(
+    actor: $user,
+    payload: [
+        'customer_id' => 123,
+        'equipment_id' => 456,
+        'symptoms' => 'No enciende, hace ruido extraño y tiene fuga de agua',
+        'request_ai_diagnosis' => true,
+        'technician_user_id' => $user->id, // For admin
+    ]
+);
+
+if ($result['ai_applied']) {
+    $order = $result['order'];
+    
+    echo "AI Diagnostic Applied:";
+    echo "Causes: " . implode(', ', $order->ai_potential_causes);
+    echo "Parts needed: " . implode(', ', $order->ai_suggested_parts);
+    echo "Estimated time: {$order->ai_estimated_time}";
+    echo "Labor cost: \${$order->ai_cost_repair_labor}";
+    echo "Parts cost: \${$order->ai_cost_replacement_parts}";
+    echo "Total cost: \${$order->ai_cost_replacement_total}";
+    echo "Tokens used: {$order->ai_tokens_used}";
+} else {
+    echo "AI Warning: {$result['ai_warning']}";
+    // Examples:
+    // "Tu plan actual no incluye Asistente IA."
+    // "Se alcanzó el límite mensual de consultas IA para tu empresa."
+    // "Esta orden ya utilizó su diagnóstico IA disponible."
+}
+```
+
+**Admin Assigning Technician:**
+
+```php
+// Admin selects technician from dropdown
+$result = $orderService->create(
+    actor: $adminUser,
+    payload: [
+        'customer_id' => 123,
+        'equipment_id' => 456,
+        'symptoms' => 'Refrigerador no enfría',
+        'technician_user_id' => $technicianUser->id,
+        'request_ai_diagnosis' => true,
+    ]
+);
+```
+
+#### Throws
+
+**403 Forbidden:**
+- Worker trying to create order outside their company
+
+**422 Unprocessable Entity:**
+- Customer and equipment don't belong to same company
+- Admin didn't select valid active technician from company
+
+---
+
+## AI Diagnostic Integration
+
+When AI diagnostic is requested, the order is enriched with the following fields:
+
+```php
+$order->update([
+    'ai_potential_causes' => string[],        // Array of identified causes
+    'ai_estimated_time' => string,            // e.g., "3-5 horas"
+    'ai_suggested_parts' => string[],         // Array of part names
+    'ai_technical_advice' => string,          // Technical recommendations
+    'ai_diagnosed_at' => timestamp,           // When diagnosis was performed
+    'ai_tokens_used' => int,                  // Total tokens consumed
+    'ai_provider' => 'local_stub',            // AI provider identifier
+    'ai_model' => 'heuristic-v1',             // Model version used
+    'ai_requires_parts_replacement' => bool,  // Whether parts needed
+    'ai_cost_repair_labor' => float,          // Labor cost estimate
+    'ai_cost_replacement_parts' => float,     // Parts cost estimate
+    'ai_cost_replacement_total' => float,     // Total cost estimate
+]);
+```
+
+### Token Calculation
+
+Prompt tokens are estimated from equipment and symptom text:
+
+```php
+// From OrderCreationService.php:141
+private function promptChars(Equipment $equipment, string $symptoms): int
+{
+    $prompt = sprintf(
+        'Equipo: %s %s %s. Síntomas: %s',
+        $equipment->type,
+        $equipment->brand,
+        $equipment->model ?? '',
+        $symptoms
+    );
+    
+    return mb_strlen($prompt);
+}
+```
+
+Response tokens are estimated from AI analysis JSON:
+
+```php
+$responseChars = mb_strlen(json_encode($analysis, JSON_UNESCAPED_UNICODE));
+$totalTokens = $tokenEstimator->estimateFromChars($promptChars)
+             + $tokenEstimator->estimateFromChars($responseChars);
+```
+
+---
+
+## AI Usage Tracking
+
+Every AI diagnostic attempt is tracked:
+
+**Successful Usage:**
+
+```php
+$aiUsageService->registerSuccess(
+    company: $company,
+    order: $order,
+    plan: 'professional',
+    promptChars: 250,
+    responseChars: 1200
+);
+```
+
+**Blocked Usage:**
+
+```php
+$aiUsageService->registerBlocked(
+    company: $company,
+    order: $order,
+    plan: 'starter',
+    status: 'blocked_plan',
+    errorMessage: 'Tu plan actual no incluye Asistente IA.',
+    promptChars: 250
+);
+```
+
+---
+
+## Plan-Based AI Limits
+
+AI diagnostic availability depends on the company's subscription plan:
+
+```php
+// Default plan if no subscription
+private const DEFAULT_PLAN = 'starter';
+
+// Plan is retrieved from company subscription
+$plan = $company->subscription?->plan ?? self::DEFAULT_PLAN;
+```
+
+The `AiPlanPolicyService` defines limits for each plan:
+- Query limit per month
+- Token limit per month
+- AI feature enabled/disabled
+
+---
+
+## Error Handling
+
+**AI Usage Exceptions:**
+
+```php
+use App\Services\Exceptions\AiUsageException;
+
+try {
+    $result = $orderService->create($actor, $payload);
+} catch (AiUsageException $e) {
+    // This won't be thrown - exceptions are caught internally
+    // Instead check: $result['ai_warning']
+}
+
+// Correct approach:
+if (!$result['ai_applied'] && $result['ai_warning']) {
+    // Handle AI limitation
+    if (str_contains($result['ai_warning'], 'plan')) {
+        // Suggest plan upgrade
+    } elseif (str_contains($result['ai_warning'], 'límite')) {
+        // Show quota exceeded message
+    }
+}
+```
+
+---
+
+## One-Time AI Diagnostic
+
+Each order can only receive AI diagnostic once:
+
+```php
+if ($order->ai_diagnosed_at) {
+    return [
+        'order' => $order,
+        'ai_applied' => false,
+        'ai_warning' => 'Esta orden ya utilizó su diagnóstico IA disponible.',
+    ];
+}
+```
+
+This prevents:
+- Double-counting quota usage
+- Token waste from repeated diagnostics
+- Accidental re-analysis
+
+---
+
+## Cost Estimation Update
+
+The AI diagnostic provides cost estimates that can be used to update `estimated_cost`:
+
+```php
+$result = $orderService->create($actor, $payload);
+
+if ($result['ai_applied']) {
+    $order = $result['order'];
+    
+    // Optionally update estimated_cost with AI suggestion
+    $order->update([
+        'estimated_cost' => $order->ai_cost_replacement_total,
+    ]);
+}
+```

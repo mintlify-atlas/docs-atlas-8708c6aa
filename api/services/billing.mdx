@@ -1,0 +1,303 @@
+---
+title: 'Billing Service'
+description: 'Create invoices, quotes, and billing documents with automatic calculations'
+---
+
+## Overview
+
+The `BillingService` handles creation of billing documents (invoices and quotes) with automatic tax calculations, inventory deductions, order status management, and support for both registered customers and walk-in sales.
+
+**Namespace:** `App\Services\BillingService`
+
+---
+
+## Methods
+
+### createDocument
+
+Creates a billing document (invoice or quote) with items, tax calculations, and automatic inventory management.
+
+```php
+public function createDocument(
+    Company $company,
+    User $actor,
+    array $payload
+): BillingDocument
+```
+
+#### Parameters
+
+<ParamField path="company" type="Company" required>
+  The company issuing the billing document
+</ParamField>
+
+<ParamField path="actor" type="User" required>
+  The user creating the document
+</ParamField>
+
+<ParamField path="payload" type="array" required>
+  Document configuration array with the following structure:
+
+  ```php
+  [
+      'document_type' => 'invoice' | 'quote',
+      'customer_mode' => 'registered' | 'walk_in',
+      'customer_id' => int,              // Required if customer_mode is 'registered'
+      'walk_in_name' => string,          // Optional for walk_in mode
+      'source' => string,                // e.g., 'web', 'mobile'
+      'tax_mode' => 'included' | 'added',
+      'notes' => string | null,
+      'items' => [
+          [
+              'item_kind' => 'product' | 'service',
+              'description' => string,
+              'quantity' => float,
+              'unit_price' => float,
+              'inventory_item_id' => int | null,  // Required for products
+              'order_id' => int | null,           // Required for services
+          ],
+          // ... more items
+      ]
+  ]
+  ```
+</ParamField>
+
+#### Returns
+
+Returns a `BillingDocument` model instance with loaded relationships:
+- `items.order`
+- `items.inventoryItem`
+- `customer`
+- `company`
+- `user`
+
+#### Behavior
+
+**Document Number Generation:**
+- Automatic sequential numbering: `DOC-{company_id}-{sequence}`
+- Example: `DOC-001-000042`
+
+**Tax Calculation Modes:**
+
+1. **Tax Included** (`tax_mode: 'included'`):
+   ```php
+   $lineTotal = round($quantity * $unitPrice, 2);
+   $lineSubtotal = round($lineTotal / (1 + $vatRate), 2);
+   $lineVat = round($lineTotal - $lineSubtotal, 2);
+   ```
+
+2. **Tax Added** (`tax_mode: 'added'`):
+   ```php
+   $lineSubtotal = round($quantity * $unitPrice, 2);
+   $lineVat = round($lineSubtotal * $vatRate, 2);
+   $lineTotal = round($lineSubtotal + $lineVat, 2);
+   ```
+
+**Walk-In Customer Handling:**
+
+When `customer_mode` is `'walk_in'`:
+1. Creates a new customer record with name from `walk_in_name` or "Cliente de Mostrador"
+2. Creates generic equipment for service items
+3. Automatically creates service orders with status `DELIVERED`
+4. Links all items to the walk-in customer
+
+**Inventory Management:**
+
+For invoices with product items:
+- Validates stock availability before creation
+- Automatically deducts inventory on invoice creation
+- Creates inventory movement records
+- Does NOT deduct inventory for quotes
+
+**Order Status Updates:**
+
+For registered customer service items:
+- **Quotes**: Sets order status to `OrderStatus::QUOTE`
+- **Invoices**: Sets order status to `OrderStatus::READY`
+
+#### Throws
+
+**422 Unprocessable Entity** for validation errors:
+- Product doesn't belong to company
+- Product not enabled for sale
+- Insufficient stock
+- Service order doesn't belong to company
+
+#### Example Usage
+
+```php
+use App\Services\BillingService;
+
+$billingService = app(BillingService::class);
+
+$document = $billingService->createDocument(
+    company: $company,
+    actor: $user,
+    payload: [
+        'document_type' => 'invoice',
+        'customer_mode' => 'registered',
+        'customer_id' => 123,
+        'source' => 'web',
+        'tax_mode' => 'added',
+        'notes' => 'Pago contra entrega',
+        'items' => [
+            [
+                'item_kind' => 'service',
+                'description' => 'Reparación de lavadora',
+                'quantity' => 1.0,
+                'unit_price' => 850.00,
+                'order_id' => 456,
+                'inventory_item_id' => null,
+            ],
+            [
+                'item_kind' => 'product',
+                'description' => 'Rodamiento industrial',
+                'quantity' => 2.0,
+                'unit_price' => 320.00,
+                'order_id' => null,
+                'inventory_item_id' => 789,
+            ],
+        ],
+    ]
+);
+
+echo "Document: {$document->document_number}";
+echo "Total: \${$document->total}";
+echo "Items: {$document->items->count()}";
+```
+
+#### Walk-In Example
+
+```php
+$walkInDocument = $billingService->createDocument(
+    company: $company,
+    actor: $user,
+    payload: [
+        'document_type' => 'invoice',
+        'customer_mode' => 'walk_in',
+        'walk_in_name' => 'Juan Pérez',
+        'source' => 'pos',
+        'tax_mode' => 'included',
+        'items' => [
+            [
+                'item_kind' => 'service',
+                'description' => 'Cambio de aceite',
+                'quantity' => 1.0,
+                'unit_price' => 450.00,
+                'order_id' => null,
+                'inventory_item_id' => null,
+            ],
+        ],
+    ]
+);
+
+// Automatically creates:
+// - Customer record for "Juan Pérez"
+// - Equipment record with serial "WALKIN-{document_id}"
+// - Service order with status DELIVERED
+```
+
+---
+
+## Private Methods
+
+The following private methods are used internally by `createDocument()`:
+
+### buildItemsAndTotals
+
+Calculates line items and totals with tax calculations.
+
+```php
+private function buildItemsAndTotals(
+    Company $company,
+    float $vatRate,
+    string $taxMode,
+    array $rawItems
+): array
+```
+
+Returns: `[$subtotal, $vatAmount, $total, $items]`
+
+### attachWalkInServiceOrders
+
+Creates customer, equipment, and orders for walk-in service items.
+
+```php
+private function attachWalkInServiceOrders(
+    Company $company,
+    User $actor,
+    BillingDocument $document,
+    array $items
+): array
+```
+
+### applyLinkedServiceOrderStatus
+
+Updates order status based on document type.
+
+```php
+private function applyLinkedServiceOrderStatus(
+    Company $company,
+    array $items,
+    string $documentType
+): void
+```
+
+### consumeInventoryForInvoice
+
+Deducts inventory for product items in invoices.
+
+```php
+private function consumeInventoryForInvoice(
+    Company $company,
+    array $items,
+    User $actor
+): void
+```
+
+### nextDocumentNumber
+
+Generates the next sequential document number.
+
+```php
+private function nextDocumentNumber(Company $company): string
+```
+
+Format: `DOC-{company_id_padded}-{sequence_padded}`
+
+Example: `DOC-001-000042`
+
+---
+
+## Transaction Safety
+
+All document creation is wrapped in a database transaction:
+
+```php
+DB::transaction(function () {
+    // Create document
+    // Create items
+    // Update orders
+    // Deduct inventory
+});
+```
+
+If any step fails, all changes are rolled back automatically.
+
+---
+
+## Validation Rules
+
+**Product Items:**
+- Must belong to the company
+- Must have `is_sale_enabled = true`
+- Must have sufficient stock for invoices
+- Quantity cannot exceed available stock
+
+**Service Items:**
+- Order must belong to the company (for registered customers)
+- Walk-in services create new orders automatically
+
+**Tax Mode:**
+- `'included'`: Price already contains tax
+- `'added'`: Tax is added to the price

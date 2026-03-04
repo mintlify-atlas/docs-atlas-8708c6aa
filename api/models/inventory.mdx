@@ -1,0 +1,377 @@
+---
+title: 'Inventory Model'
+description: 'API reference for the InventoryItem model in ElectroFix'
+---
+
+## Overview
+
+The InventoryItem model manages spare parts and components inventory in ElectroFix. It tracks stock levels, pricing, low stock thresholds, and supports both internal inventory management and sales to customers.
+
+## Properties
+
+### Fillable Attributes
+
+<ParamField path="company_id" type="integer" required>
+  Foreign key to the Company that owns this inventory
+</ParamField>
+
+<ParamField path="name" type="string" required>
+  Name or description of the inventory item
+</ParamField>
+
+<ParamField path="internal_code" type="string">
+  Company's internal SKU or product code for tracking
+</ParamField>
+
+<ParamField path="quantity" type="integer" required>
+  Current stock quantity available
+</ParamField>
+
+<ParamField path="low_stock_threshold" type="integer">
+  Minimum quantity that triggers low stock alert
+</ParamField>
+
+<ParamField path="is_sale_enabled" type="boolean">
+  Whether this item is available for sale to customers
+</ParamField>
+
+<ParamField path="sale_price" type="decimal">
+  Price per unit when sold to customers
+</ParamField>
+
+## Casts
+
+```php
+protected function casts(): array
+{
+    return [
+        'quantity' => 'integer',
+        'low_stock_threshold' => 'integer',
+        'is_sale_enabled' => 'boolean',
+        'sale_price' => 'decimal:2',
+    ];
+}
+```
+
+- `quantity` and `low_stock_threshold` are cast to integers
+- `is_sale_enabled` is cast to boolean
+- `sale_price` is cast to decimal with 2 decimal precision
+
+## Relationships
+
+### company()
+
+**Type:** `BelongsTo`
+
+Returns the company that owns this inventory item.
+
+```php
+public function company(): BelongsTo
+{
+    return $this->belongsTo(Company::class);
+}
+```
+
+### movements()
+
+**Type:** `HasMany`
+
+Returns all inventory movements (additions, removals) for this item.
+
+```php
+public function movements(): HasMany
+{
+    return $this->hasMany(InventoryMovement::class);
+}
+```
+
+### billingItems()
+
+**Type:** `HasMany`
+
+Returns all billing document line items that reference this inventory item.
+
+```php
+public function billingItems(): HasMany
+{
+    return $this->hasMany(BillingDocumentItem::class);
+}
+```
+
+## Methods
+
+### isLowStock()
+
+Check if the current quantity is at or below the low stock threshold.
+
+```php
+public function isLowStock(): bool
+{
+    return $this->quantity <= $this->low_stock_threshold;
+}
+```
+
+**Returns:** `bool` - True if stock is low or depleted
+
+## Usage Examples
+
+### Creating New Inventory Item
+
+```php
+$item = InventoryItem::create([
+    'company_id' => 1,
+    'name' => 'iPhone 14 LCD Screen',
+    'internal_code' => 'LCD-IP14-001',
+    'quantity' => 25,
+    'low_stock_threshold' => 5,
+    'is_sale_enabled' => true,
+    'sale_price' => 89.99,
+]);
+```
+
+### Checking Low Stock Items
+
+```php
+// Get all low stock items for a company
+$lowStockItems = InventoryItem::where('company_id', $companyId)
+    ->get()
+    ->filter(function($item) {
+        return $item->isLowStock();
+    });
+
+// Alternative: Using raw SQL
+$lowStockItems = InventoryItem::where('company_id', $companyId)
+    ->whereRaw('quantity <= low_stock_threshold')
+    ->get();
+```
+
+### Updating Stock Quantity
+
+```php
+// Add stock
+$item->increment('quantity', 10);
+
+// Remove stock
+$item->decrement('quantity', 3);
+
+// Set exact quantity
+$item->update(['quantity' => 50]);
+```
+
+### Querying Inventory
+
+```php
+// Get all items in stock
+$inStock = InventoryItem::where('company_id', $companyId)
+    ->where('quantity', '>', 0)
+    ->orderBy('name')
+    ->get();
+
+// Get items available for sale
+$forSale = InventoryItem::where('company_id', $companyId)
+    ->where('is_sale_enabled', true)
+    ->where('quantity', '>', 0)
+    ->get();
+
+// Search by name or code
+$searchTerm = 'LCD';
+$results = InventoryItem::where('company_id', $companyId)
+    ->where(function($query) use ($searchTerm) {
+        $query->where('name', 'like', "%{$searchTerm}%")
+              ->orWhere('internal_code', 'like', "%{$searchTerm}%");
+    })
+    ->get();
+```
+
+### Inventory Movements
+
+```php
+// Record stock addition
+$item->movements()->create([
+    'company_id' => $item->company_id,
+    'user_id' => auth()->id(),
+    'movement_type' => 'in',
+    'quantity' => 10,
+    'notes' => 'Received from supplier',
+]);
+
+// Record stock removal
+$item->movements()->create([
+    'company_id' => $item->company_id,
+    'user_id' => auth()->id(),
+    'movement_type' => 'out',
+    'quantity' => 2,
+    'notes' => 'Used in repair order #123',
+]);
+```
+
+### Price Management
+
+```php
+// Enable item for sale
+$item->update([
+    'is_sale_enabled' => true,
+    'sale_price' => 99.99,
+]);
+
+// Disable from sale
+$item->update([
+    'is_sale_enabled' => false,
+]);
+
+// Update pricing
+$item->update([
+    'sale_price' => 79.99,
+]);
+```
+
+### Inventory Valuation
+
+```php
+// Calculate total inventory value
+$totalValue = InventoryItem::where('company_id', $companyId)
+    ->get()
+    ->sum(function($item) {
+        return $item->quantity * $item->sale_price;
+    });
+
+// Get value of low stock items
+$lowStockValue = InventoryItem::where('company_id', $companyId)
+    ->whereRaw('quantity <= low_stock_threshold')
+    ->get()
+    ->sum(function($item) {
+        return $item->quantity * $item->sale_price;
+    });
+```
+
+### Stock Alerts
+
+```php
+// Get items needing reorder
+$needsReorder = InventoryItem::where('company_id', $companyId)
+    ->whereRaw('quantity <= low_stock_threshold')
+    ->orderBy('quantity', 'asc')
+    ->get();
+
+foreach ($needsReorder as $item) {
+    echo "LOW STOCK: {$item->name} - Only {$item->quantity} left (threshold: {$item->low_stock_threshold})\n";
+}
+```
+
+### Sales History
+
+```php
+// Get sales history for an item
+$salesHistory = $item->billingItems()
+    ->with('billingDocument')
+    ->get();
+
+// Calculate total units sold
+$totalSold = $item->billingItems()->sum('quantity');
+
+// Calculate revenue from this item
+$revenue = $item->billingItems()
+    ->sum(DB::raw('quantity * price'));
+```
+
+### Inventory Reports
+
+```php
+// Get inventory summary
+$summary = [
+    'total_items' => InventoryItem::where('company_id', $companyId)->count(),
+    'total_quantity' => InventoryItem::where('company_id', $companyId)->sum('quantity'),
+    'low_stock_count' => InventoryItem::where('company_id', $companyId)
+        ->whereRaw('quantity <= low_stock_threshold')
+        ->count(),
+    'out_of_stock_count' => InventoryItem::where('company_id', $companyId)
+        ->where('quantity', 0)
+        ->count(),
+    'for_sale_count' => InventoryItem::where('company_id', $companyId)
+        ->where('is_sale_enabled', true)
+        ->count(),
+];
+```
+
+### Finding Items by Code
+
+```php
+// Find item by internal code
+$item = InventoryItem::where('company_id', $companyId)
+    ->where('internal_code', $code)
+    ->first();
+
+if (!$item) {
+    throw new Exception('Item not found');
+}
+```
+
+### Bulk Stock Operations
+
+```php
+// Add stock to multiple items
+$updates = [
+    ['id' => 1, 'quantity' => 10],
+    ['id' => 2, 'quantity' => 15],
+    ['id' => 3, 'quantity' => 5],
+];
+
+foreach ($updates as $update) {
+    InventoryItem::find($update['id'])
+        ->increment('quantity', $update['quantity']);
+}
+```
+
+### Inventory Transfer
+
+```php
+// Transfer stock between items (e.g., consolidation)
+$sourceItem->decrement('quantity', 5);
+$targetItem->increment('quantity', 5);
+
+// Record movements
+$sourceItem->movements()->create([
+    'company_id' => $companyId,
+    'user_id' => auth()->id(),
+    'movement_type' => 'out',
+    'quantity' => 5,
+    'notes' => 'Transferred to item #' . $targetItem->id,
+]);
+```
+
+## Common Patterns
+
+### Check Stock Before Sale
+
+```php
+// Validate stock availability
+$requestedQty = 3;
+$item = InventoryItem::find($itemId);
+
+if ($item->quantity < $requestedQty) {
+    throw new Exception('Insufficient stock. Available: ' . $item->quantity);
+}
+
+if (!$item->is_sale_enabled) {
+    throw new Exception('This item is not available for sale');
+}
+
+// Proceed with sale
+$item->decrement('quantity', $requestedQty);
+```
+
+### Low Stock Notification
+
+```php
+// Check if notification needed after stock change
+$item->decrement('quantity', 2);
+
+if ($item->isLowStock()) {
+    // Send notification
+    Notification::send($admins, new LowStockNotification($item));
+}
+```
+
+## Source Reference
+
+Model file: `/home/daytona/workspace/source/app/Models/InventoryItem.php`

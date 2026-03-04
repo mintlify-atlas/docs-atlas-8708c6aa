@@ -1,0 +1,318 @@
+---
+title: Managing Work Orders
+description: Complete guide to creating, tracking, and managing repair orders with AI diagnostics
+---
+
+## Overview
+
+The Orders module is the core of ElectroFix AI, allowing you to manage repair workflows from intake to delivery. Each order tracks customer equipment, symptoms, diagnostics, technician assignments, and repair status through a complete lifecycle.
+
+### What You Can Do
+
+- Create new repair orders for customer equipment
+- Request AI-powered diagnostic analysis
+- Track order status through 7 stages
+- Assign technicians to orders
+- View AI-generated cost estimates and repair recommendations
+- Search and filter orders by customer, equipment, or technician
+
+## Accessing Orders
+
+Navigate to **Orders** from the main navigation menu. You'll see:
+
+- A grid view of all active orders
+- Search bar to filter by ID, technician, customer, or equipment
+- Total order count
+- AI availability status for your subscription plan
+- AI usage metrics (queries and tokens used this month)
+
+## Creating a New Order
+
+<Steps>
+  <Step title="Open the Order Form">
+    Click the **Nueva Orden** button in the top-right corner. A modal dialog will open with the order creation form.
+  </Step>
+
+  <Step title="Select Customer">
+    Choose the customer from the **Cliente** dropdown. This field is required.
+    
+    The equipment dropdown will automatically filter to show only equipment owned by the selected customer.
+  </Step>
+
+  <Step title="Select Equipment">
+    Choose the equipment being serviced from the **Equipo** dropdown. Each option shows:
+    - Equipment brand
+    - Model
+    - Type (e.g., Refrigerator, Washing Machine)
+    
+    This field is required.
+  </Step>
+
+  <Step title="Enter Symptoms">
+    Describe the reported issues in the **Síntomas reportados** text area:
+    - Maximum 600 characters
+    - Minimum 5 characters required if requesting AI diagnosis
+    - Be specific for better AI analysis
+    
+    **Example**: "Refrigerator not cooling. Compressor runs continuously but temperature stays at 15°C. Ice buildup on back panel."
+  </Step>
+
+  <Step title="Assign Technician">
+    **For Workers**: Your name is automatically assigned
+    
+    **For Admins**: Select from the dropdown of active company technicians (workers and admins)
+    
+    This field is required.
+  </Step>
+
+  <Step title="Set Estimated Cost (Optional)">
+    Enter the preliminary cost estimate if known. This can be updated later based on AI recommendations or actual diagnosis.
+  </Step>
+
+  <Step title="Request AI Diagnosis (Optional)">
+    Check **Solicitar diagnóstico IA al guardar la orden** to enable AI analysis:
+    
+    <Warning>
+      - Only available on **Enterprise** and **Developer Test** plans
+      - Requires symptoms to be entered (minimum 5 characters)
+      - Consumes one AI query from your monthly limit
+      - AI analysis runs once per order when created
+    </Warning>
+    
+    The AI will analyze:
+    - Probable causes of failure
+    - Estimated repair time
+    - Suggested replacement parts
+    - Labor cost estimates
+    - Parts replacement costs (if applicable)
+    - Technical advice for the repair
+  </Step>
+
+  <Step title="Save the Order">
+    Click **Guardar Orden** to create the order. The system will:
+    - Create the order record
+    - Run AI diagnosis if requested (may take a few seconds)
+    - Display success confirmation
+    - Show AI warnings if limits are exceeded
+  </Step>
+</Steps>
+
+## Order Form Fields
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| **customer_id** | Dropdown | Yes | Must be existing customer in your company |
+| **equipment_id** | Dropdown | Yes | Must be existing equipment owned by selected customer |
+| **symptoms** | Text area | Conditional | 5-600 characters (required if requesting AI) |
+| **technician** | Text/Dropdown | Yes | Auto-filled for workers, selectable for admins |
+| **estimated_cost** | Number | No | Minimum 0, supports decimals |
+| **request_ai_diagnosis** | Checkbox | No | Only available on Enterprise/Developer Test plans |
+
+## Understanding Order Statuses
+
+Orders progress through 7 distinct statuses:
+
+<CardGroup cols={2}>
+  <Card title="Recibido" icon="inbox">
+    Initial status when order is created. Equipment has been received and logged.
+  </Card>
+  
+  <Card title="Diagnóstico" icon="magnifying-glass">
+    Technician is actively diagnosing the issue. AI recommendations available if generated.
+  </Card>
+  
+  <Card title="Reparación" icon="wrench">
+    Repair work in progress. Parts may be ordered or installed.
+  </Card>
+  
+  <Card title="Cotización" icon="file-invoice">
+    Quote has been prepared for customer approval. Set automatically when quote document is generated.
+  </Card>
+  
+  <Card title="Listo" icon="check-circle">
+    Repair complete and ready for customer pickup. Set automatically when invoice is generated.
+  </Card>
+  
+  <Card title="Entregado" icon="box-check">
+    Equipment returned to customer. Final status for completed repairs.
+  </Card>
+  
+  <Card title="No reparado" icon="xmark">
+    Repair declined or not feasible. Equipment returned without repair.
+  </Card>
+</CardGroup>
+
+## Viewing Order Details
+
+Click **Detalles** on any order card to open the full order view:
+
+### Customer and Equipment Section
+- Customer name and email
+- Equipment brand, model, and serial number
+- Order creation and last update timestamps
+
+### Status Management
+Change the order status by clicking any status button. The current status is highlighted in blue.
+
+### Symptom Report
+View the original customer-reported issues.
+
+### Cost Estimate
+The estimated repair cost displays prominently. Update this as the diagnosis progresses.
+
+### AI Analysis (If Generated)
+
+When AI diagnosis was requested, you'll see:
+
+**Probable Causes** (`ai_potential_causes`)
+- List of likely failure reasons based on symptoms and equipment type
+
+**Estimated Repair Time** (`ai_estimated_time`)
+- Suggested duration for the repair
+
+**Suggested Parts** (`ai_suggested_parts`)
+- Recommended replacement components
+
+**Cost Breakdown**
+- **Labor Cost**: `ai_cost_repair_labor` - Suggested cost for repair work
+- **Parts Cost**: `ai_cost_replacement_parts` - Estimated parts expense (if replacement needed)
+- **Total Cost**: `ai_cost_replacement_total` - Combined cost when parts are required
+
+**Technical Advice** (`ai_technical_advice`)
+- Specific recommendations for performing the repair
+
+**Metadata**
+- Tokens used for this AI analysis
+- Diagnosis generation timestamp
+
+<Note>
+  AI diagnostics are generated only once when the order is created with the AI checkbox enabled. They cannot be regenerated later.
+</Note>
+
+## Searching and Filtering Orders
+
+Use the search bar to find specific orders. The search includes:
+
+- **Order ID**: Exact match on order number
+- **Technician name**: Partial match
+- **Customer name**: Partial match
+- **Equipment brand**: Partial match
+- **Equipment model**: Partial match
+
+Results update when you click **Buscar** or press Enter.
+
+## AI Usage Monitoring
+
+The orders page displays your AI consumption:
+
+- **AI Status Badge**: Shows if AI is enabled for your plan
+- **Queries Used**: Current month usage vs. limit (e.g., "5/100")
+- **Tokens Used**: Total tokens consumed vs. monthly allowance
+
+<Warning>
+  When you exceed your AI query or token limit, new orders cannot request AI diagnosis until the next billing cycle.
+</Warning>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Write Detailed Symptoms">
+    Provide specific, descriptive symptoms for better AI analysis:
+    - Include observable behaviors
+    - Mention sounds, temperatures, or error codes
+    - Note when the problem occurs
+    - Describe any recent changes or repairs
+  </Accordion>
+  
+  <Accordion title="Update Status Regularly">
+    Keep order status current to:
+    - Provide accurate tracking for customers
+    - Enable proper integration with billing
+    - Maintain clear workflow for team members
+  </Accordion>
+  
+  <Accordion title="Use AI Strategically">
+    AI queries are limited by your plan:
+    - Use AI for complex or unfamiliar issues
+    - Skip AI for routine repairs you already understand
+    - Monitor your monthly usage to avoid running out
+  </Accordion>
+  
+  <Accordion title="Review AI Recommendations">
+    AI suggestions are helpful but not infallible:
+    - Verify recommendations against actual equipment condition
+    - Use as a starting point for diagnosis
+    - Apply your professional expertise to final decisions
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### Cannot Request AI Diagnosis
+
+**Possible causes:**
+- Your subscription plan is Starter or Pro (AI requires Enterprise or Developer Test)
+- Monthly AI query limit exceeded
+- Monthly token limit exceeded
+- Symptoms field has fewer than 5 characters
+
+**Solution**: Upgrade your plan or wait until next billing cycle for limits to reset.
+
+### Equipment Not Appearing in Dropdown
+
+**Cause**: Equipment must belong to the selected customer.
+
+**Solution**: 
+1. Verify you selected the correct customer
+2. Check that the equipment exists and is assigned to this customer
+3. Create the equipment record if it doesn't exist
+
+### Cannot Modify Order from Another Company
+
+**Cause**: Orders are company-scoped for data isolation.
+
+**Solution**: You can only view and edit orders belonging to your company. Contact support if you need to transfer an order.
+
+## Technical Reference
+
+### Controller Actions
+
+- **Index**: `GET /worker/orders` - List all orders with search and pagination
+- **Store**: `POST /worker/orders` - Create new order with optional AI diagnosis  
+- **Update Status**: `PATCH /worker/orders/{order}/status` - Change order status
+
+### Data Stored in Order Record
+
+```php
+[
+  'customer_id',           // Foreign key to customer
+  'equipment_id',          // Foreign key to equipment  
+  'company_id',            // Auto-set to user's company
+  'technician',            // Technician name
+  'technician_user_id',    // User ID if assigned from dropdown
+  'symptoms',              // Customer-reported issues
+  'estimated_cost',        // Preliminary cost estimate
+  'status',                // Current workflow status
+  'request_ai_diagnosis',  // Boolean flag (processed at creation)
+  'ai_diagnosed_at',       // Timestamp when AI ran
+  'ai_potential_causes',   // Array of likely causes
+  'ai_estimated_time',     // Suggested repair duration
+  'ai_suggested_parts',    // Array of parts to replace
+  'ai_cost_repair_labor',  // Labor cost estimate
+  'ai_cost_replacement_parts',  // Parts cost estimate  
+  'ai_cost_replacement_total',  // Combined cost estimate
+  'ai_requires_parts_replacement',  // Boolean flag
+  'ai_technical_advice',   // Technical recommendations
+  'ai_tokens_used',        // Token consumption for this query
+]
+```
+
+### Pagination
+
+Orders are paginated at 18 per page, sorted by newest first (`created_at DESC`).
+
+## Related Features
+
+- [Managing Customers](/guides/worker/customers) - Create customer records before orders
+- [Managing Equipment](/guides/worker/equipment) - Register equipment for customers
+- [Billing & Invoices](/guides/worker/billing) - Generate invoices from completed orders
