@@ -1,0 +1,368 @@
+---
+title: InventoryMovement Model
+description: Audit trail for inventory stock changes tracking additions, sales, and adjustments
+---
+
+## Overview
+
+The `InventoryMovement` model provides a complete audit trail of all stock changes for inventory items. Every stock adjustment creates a movement record showing what changed, who made the change, and the before/after stock levels.
+
+## Model Definition
+
+```php
+namespace App\Models;
+
+class InventoryMovement extends Model
+{
+    protected $fillable = [
+        'inventory_item_id',
+        'company_id',
+        'user_id',
+        'movement_type',
+        'quantity',
+        'stock_before',
+        'stock_after',
+        'notes',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'quantity' => 'integer',
+            'stock_before' => 'integer',
+            'stock_after' => 'integer',
+        ];
+    }
+}
+```
+
+## Attributes
+
+<ParamField path="inventory_item_id" type="integer" required>
+  Foreign key to the inventory item being adjusted
+</ParamField>
+
+<ParamField path="company_id" type="integer" required>
+  Foreign key to the company (multi-tenant isolation)
+</ParamField>
+
+<ParamField path="user_id" type="integer" required>
+  User who performed the stock adjustment
+</ParamField>
+
+<ParamField path="movement_type" type="string" required>
+  Type of movement: `addition`, `sale`, `adjustment_in`, `adjustment_out`, `return`
+</ParamField>
+
+<ParamField path="quantity" type="integer" required>
+  Quantity changed (positive for increases, negative for decreases)
+</ParamField>
+
+<ParamField path="stock_before" type="integer" required>
+  Stock level before this movement
+</ParamField>
+
+<ParamField path="stock_after" type="integer" required>
+  Stock level after this movement
+</ParamField>
+
+<ParamField path="notes" type="string">
+  Optional notes explaining the movement
+</ParamField>
+
+## Relationships
+
+### Inventory Item
+
+```php
+public function inventoryItem(): BelongsTo
+{
+    return $this->belongsTo(InventoryItem::class);
+}
+```
+
+Access the item that was adjusted:
+
+```php
+$movement = InventoryMovement::with('inventoryItem')->find(1);
+$itemName = $movement->inventoryItem->name;
+$currentStock = $movement->inventoryItem->stock;
+```
+
+### Company
+
+```php
+public function company(): BelongsTo
+{
+    return $this->belongsTo(Company::class);
+}
+```
+
+Movements are scoped to companies:
+
+```php
+$movements = InventoryMovement::where('company_id', $companyId)->get();
+```
+
+### User
+
+```php
+public function user(): BelongsTo
+{
+    return $this->belongsTo(User::class);
+}
+```
+
+Track who made the adjustment:
+
+```php
+$movement = InventoryMovement::with('user')->find(1);
+$userName = $movement->user->name;
+$userEmail = $movement->user->email;
+```
+
+## Movement Types
+
+| Type | Description | Quantity Sign | Use Case |
+|------|-------------|---------------|----------|
+| `addition` | Stock added to inventory | Positive | Receiving new shipments |
+| `sale` | Stock sold to customer | Negative | Billing a product |
+| `adjustment_in` | Manual increase | Positive | Correcting count errors (found more) |
+| `adjustment_out` | Manual decrease | Negative | Correcting count errors (found less) |
+| `return` | Customer return | Positive | Product returned by customer |
+
+## Usage Examples
+
+### Recording a Stock Addition
+
+```php
+use App\Models\InventoryMovement;
+
+$movement = InventoryMovement::create([
+    'inventory_item_id' => $item->id,
+    'company_id' => $item->company_id,
+    'user_id' => auth()->id(),
+    'movement_type' => 'addition',
+    'quantity' => 50,
+    'stock_before' => $item->stock,
+    'stock_after' => $item->stock + 50,
+    'notes' => 'Received shipment from supplier',
+]);
+
+// Update the item stock
+$item->increment('stock', 50);
+```
+
+### Recording a Sale
+
+```php
+$quantitySold = 3;
+
+$movement = InventoryMovement::create([
+    'inventory_item_id' => $item->id,
+    'company_id' => $item->company_id,
+    'user_id' => auth()->id(),
+    'movement_type' => 'sale',
+    'quantity' => -$quantitySold,
+    'stock_before' => $item->stock,
+    'stock_after' => $item->stock - $quantitySold,
+    'notes' => 'Sold via billing document #' . $document->id,
+]);
+
+$item->decrement('stock', $quantitySold);
+```
+
+### Recording a Manual Adjustment
+
+```php
+// Physical count shows 5 fewer items than recorded
+$discrepancy = -5;
+
+$movement = InventoryMovement::create([
+    'inventory_item_id' => $item->id,
+    'company_id' => $item->company_id,
+    'user_id' => auth()->id(),
+    'movement_type' => $discrepancy > 0 ? 'adjustment_in' : 'adjustment_out',
+    'quantity' => $discrepancy,
+    'stock_before' => $item->stock,
+    'stock_after' => $item->stock + $discrepancy,
+    'notes' => 'Physical inventory count correction',
+]);
+
+$item->update(['stock' => $item->stock + $discrepancy]);
+```
+
+### Querying Movement History
+
+```php
+// Get all movements for an item
+$movements = InventoryMovement::where('inventory_item_id', $itemId)
+    ->orderBy('created_at', 'desc')
+    ->with('user')
+    ->get();
+
+// Get recent sales
+$recentSales = InventoryMovement::where('movement_type', 'sale')
+    ->where('company_id', $companyId)
+    ->whereBetween('created_at', [now()->subDays(30), now()])
+    ->get();
+
+// Get adjustments by a specific user
+$userAdjustments = InventoryMovement::where('user_id', $userId)
+    ->whereIn('movement_type', ['adjustment_in', 'adjustment_out'])
+    ->get();
+```
+
+## Automatic Movement Creation
+
+The `InventoryService` automatically creates movements when stock changes:
+
+```php
+// app/Services/InventoryService.php
+
+public function adjustStock(InventoryItem $item, int $delta, string $reason): void
+{
+    $movementType = match (true) {
+        $delta > 0 && str_contains(strtolower($reason), 'ajuste') => 'adjustment_in',
+        $delta < 0 && str_contains(strtolower($reason), 'ajuste') => 'adjustment_out',
+        $delta > 0 => 'addition',
+        default => 'adjustment_out',
+    };
+
+    InventoryMovement::create([
+        'inventory_item_id' => $item->id,
+        'company_id' => $item->company_id,
+        'user_id' => auth()->id(),
+        'movement_type' => $movementType,
+        'quantity' => $delta,
+        'stock_before' => $item->stock,
+        'stock_after' => $item->stock + $delta,
+        'notes' => $reason,
+    ]);
+
+    $item->update(['stock' => $item->stock + $delta]);
+}
+```
+
+## Validation
+
+Stock movements should always maintain data integrity:
+
+```php
+// Verify stock_after = stock_before + quantity
+$isValid = $movement->stock_after === ($movement->stock_before + $movement->quantity);
+
+// Verify current stock matches last movement
+$lastMovement = InventoryMovement::where('inventory_item_id', $itemId)
+    ->latest()
+    ->first();
+    
+if ($lastMovement && $item->stock !== $lastMovement->stock_after) {
+    // Stock mismatch detected
+    Log::warning("Stock mismatch for item {$itemId}");
+}
+```
+
+## Reporting & Analytics
+
+### Stock Movement Report
+
+```php
+// Total units added in the last month
+$totalAdded = InventoryMovement::where('company_id', $companyId)
+    ->whereIn('movement_type', ['addition', 'adjustment_in', 'return'])
+    ->whereBetween('created_at', [now()->subMonth(), now()])
+    ->sum('quantity');
+
+// Total units sold
+$totalSold = InventoryMovement::where('company_id', $companyId)
+    ->where('movement_type', 'sale')
+    ->whereBetween('created_at', [now()->subMonth(), now()])
+    ->sum('quantity');
+```
+
+### Most Active Items
+
+```php
+$mostActive = InventoryMovement::selectRaw('inventory_item_id, COUNT(*) as movement_count')
+    ->where('company_id', $companyId)
+    ->whereBetween('created_at', [now()->subDays(30), now()])
+    ->groupBy('inventory_item_id')
+    ->orderBy('movement_count', 'desc')
+    ->limit(10)
+    ->with('inventoryItem')
+    ->get();
+```
+
+## Best Practices
+
+### 1. Never Delete Movements
+
+Movements are audit records. Mark as void if needed:
+
+```php
+// Don't do this
+$movement->delete();
+
+// Do this instead
+$movement->update(['notes' => '[VOID] ' . $movement->notes]);
+```
+
+### 2. Always Record Who and When
+
+```php
+InventoryMovement::create([
+    'user_id' => auth()->id(), // Always track who
+    'notes' => 'Reason for adjustment', // Always explain why
+    // ...
+]);
+```
+
+### 3. Validate Stock Calculations
+
+```php
+if ($stockBefore + $quantity !== $stockAfter) {
+    throw new \Exception('Stock calculation error');
+}
+```
+
+### 4. Use Transactions
+
+When updating stock and creating movements:
+
+```php
+DB::transaction(function () use ($item, $quantity) {
+    InventoryMovement::create([...]);
+    $item->increment('stock', $quantity);
+});
+```
+
+## Database Schema
+
+```sql
+CREATE TABLE inventory_movements (
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    inventory_item_id BIGINT UNSIGNED NOT NULL,
+    company_id BIGINT UNSIGNED NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    movement_type VARCHAR(255) NOT NULL,
+    quantity INT NOT NULL,
+    stock_before INT NOT NULL,
+    stock_after INT NOT NULL,
+    notes TEXT NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    FOREIGN KEY (inventory_item_id) REFERENCES inventory_items(id) ON DELETE CASCADE,
+    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
+    INDEX idx_item_created (inventory_item_id, created_at),
+    INDEX idx_company_type (company_id, movement_type)
+);
+```
+
+## Related Models
+
+- [InventoryItem](/api/models/inventory) - The item being adjusted
+- [Company](/api/models/company) - Company ownership
+- [User](/api/models/user) - User who made the change
+- [InventoryService](/api/services/inventory) - Stock management operations

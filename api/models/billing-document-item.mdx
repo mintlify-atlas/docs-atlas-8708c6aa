@@ -1,0 +1,300 @@
+---
+title: BillingDocumentItem Model
+description: Line items for billing documents representing products, services, or order charges
+---
+
+## Overview
+
+The `BillingDocumentItem` model represents individual line items within a billing document. Each item can reference inventory products, service orders, or be standalone descriptions. Items track quantity, pricing, and tax calculations.
+
+## Model Definition
+
+```php
+namespace App\Models;
+
+class BillingDocumentItem extends Model
+{
+    protected $fillable = [
+        'billing_document_id',
+        'inventory_item_id',
+        'order_id',
+        'item_kind',
+        'description',
+        'quantity',
+        'unit_price',
+        'line_subtotal',
+        'line_vat',
+        'line_total',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'quantity' => 'decimal:2',
+            'unit_price' => 'decimal:2',
+            'line_subtotal' => 'decimal:2',
+            'line_vat' => 'decimal:2',
+            'line_total' => 'decimal:2',
+        ];
+    }
+}
+```
+
+## Attributes
+
+<ParamField path="billing_document_id" type="integer" required>
+  Foreign key to the parent billing document
+</ParamField>
+
+<ParamField path="inventory_item_id" type="integer">
+  Optional reference to an inventory item for product sales
+</ParamField>
+
+<ParamField path="order_id" type="integer">
+  Optional reference to a service order for repair charges
+</ParamField>
+
+<ParamField path="item_kind" type="string" required>
+  Type of line item: `product`, `service`, or `custom`
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Item description shown on the invoice
+</ParamField>
+
+<ParamField path="quantity" type="decimal" required>
+  Quantity of items (can be fractional for services billed by hours)
+</ParamField>
+
+<ParamField path="unit_price" type="decimal" required>
+  Price per unit before tax
+</ParamField>
+
+<ParamField path="line_subtotal" type="decimal" required>
+  Subtotal for this line (quantity × unit_price)
+</ParamField>
+
+<ParamField path="line_vat" type="decimal" required>
+  VAT/tax amount for this line
+</ParamField>
+
+<ParamField path="line_total" type="decimal" required>
+  Total for this line (line_subtotal + line_vat)
+</ParamField>
+
+## Relationships
+
+### Parent Document
+
+```php
+public function document(): BelongsTo
+{
+    return $this->belongsTo(BillingDocument::class, 'billing_document_id');
+}
+```
+
+Access the parent billing document:
+
+```php
+$item = BillingDocumentItem::find(1);
+$document = $item->document;
+$documentNumber = $document->document_number;
+```
+
+### Inventory Item
+
+```php
+public function inventoryItem(): BelongsTo
+{
+    return $this->belongsTo(InventoryItem::class);
+}
+```
+
+For product line items, reference the inventory:
+
+```php
+$item = BillingDocumentItem::with('inventoryItem')->find(1);
+if ($item->inventory_item_id) {
+    $productName = $item->inventoryItem->name;
+    $sku = $item->inventoryItem->sku;
+}
+```
+
+### Service Order
+
+```php
+public function order(): BelongsTo
+{
+    return $this->belongsTo(Order::class);
+}
+```
+
+For service charges, reference the work order:
+
+```php
+$item = BillingDocumentItem::with('order')->find(1);
+if ($item->order_id) {
+    $orderNumber = $item->order->id;
+    $technician = $item->order->technician;
+}
+```
+
+## Usage Examples
+
+### Creating Product Line Items
+
+```php
+use App\Models\BillingDocumentItem;
+
+$item = BillingDocumentItem::create([
+    'billing_document_id' => $document->id,
+    'inventory_item_id' => $inventoryItem->id,
+    'item_kind' => 'product',
+    'description' => $inventoryItem->name,
+    'quantity' => 2,
+    'unit_price' => $inventoryItem->sale_price,
+    'line_subtotal' => $inventoryItem->sale_price * 2,
+    'line_vat' => ($inventoryItem->sale_price * 2) * ($vatRate / 100),
+    'line_total' => $lineSubtotal + $lineVat,
+]);
+```
+
+### Creating Service Line Items
+
+```php
+$item = BillingDocumentItem::create([
+    'billing_document_id' => $document->id,
+    'order_id' => $order->id,
+    'item_kind' => 'service',
+    'description' => 'Reparación de ' . $equipment->type,
+    'quantity' => 1,
+    'unit_price' => $order->estimated_cost,
+    'line_subtotal' => $order->estimated_cost,
+    'line_vat' => $order->estimated_cost * ($vatRate / 100),
+    'line_total' => $lineSubtotal + $lineVat,
+]);
+```
+
+### Calculating Line Totals
+
+```php
+// Manual calculation
+$quantity = 3;
+$unitPrice = 150.00;
+$vatRate = 16; // 16%
+
+$lineSubtotal = $quantity * $unitPrice;
+$lineVat = $lineSubtotal * ($vatRate / 100);
+$lineTotal = $lineSubtotal + $lineVat;
+
+// Using BillingService
+$item = $billingService->createLineItem([
+    'description' => 'Cable HDMI 2m',
+    'quantity' => 3,
+    'unit_price' => 150.00,
+]);
+```
+
+### Querying Line Items
+
+```php
+// Get all items for a document
+$items = BillingDocumentItem::where('billing_document_id', $documentId)
+    ->with(['inventoryItem', 'order'])
+    ->get();
+
+// Get product sales only
+$productItems = BillingDocumentItem::where('item_kind', 'product')
+    ->whereNotNull('inventory_item_id')
+    ->get();
+
+// Get service charges only
+$serviceItems = BillingDocumentItem::where('item_kind', 'service')
+    ->whereNotNull('order_id')
+    ->get();
+```
+
+## Item Kinds
+
+The `item_kind` field categorizes line items:
+
+| Kind | Description | Typical Use |
+|------|-------------|-------------|
+| `product` | Physical inventory item | Parts, accessories sold from stock |
+| `service` | Labor or service charge | Repair work, diagnostic fees |
+| `custom` | Freeform item | One-off charges, discounts, adjustments |
+
+## Validation Rules
+
+When creating billing document items, the system enforces:
+
+```php
+// app/Http/Requests/StoreBillingDocumentRequest.php
+'items.*.description' => 'required|string|max:255',
+'items.*.quantity' => 'required|numeric|min:0.01',
+'items.*.unit_price' => 'required|numeric|min:0',
+```
+
+## Best Practices
+
+### 1. Always Calculate Totals
+
+Don't trust user input for calculated fields:
+
+```php
+$lineSubtotal = $quantity * $unitPrice;
+$lineVat = round($lineSubtotal * ($vatRate / 100), 2);
+$lineTotal = $lineSubtotal + $lineVat;
+```
+
+### 2. Track Inventory References
+
+For product items, always link to inventory:
+
+```php
+if ($itemKind === 'product' && $inventoryItemId) {
+    $item->inventory_item_id = $inventoryItemId;
+}
+```
+
+### 3. Preserve Descriptions
+
+Store item descriptions at billing time (don't rely on joins):
+
+```php
+// Good: Frozen description
+'description' => $inventoryItem->name,
+
+// Bad: Dynamic description (inventory name might change)
+'description' => '', // and later join to inventory
+```
+
+## Database Schema
+
+```sql
+CREATE TABLE billing_document_items (
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    billing_document_id BIGINT UNSIGNED NOT NULL,
+    inventory_item_id BIGINT UNSIGNED NULL,
+    order_id BIGINT UNSIGNED NULL,
+    item_kind VARCHAR(255) NOT NULL,
+    description VARCHAR(255) NOT NULL,
+    quantity DECIMAL(10,2) NOT NULL,
+    unit_price DECIMAL(10,2) NOT NULL,
+    line_subtotal DECIMAL(10,2) NOT NULL,
+    line_vat DECIMAL(10,2) NOT NULL,
+    line_total DECIMAL(10,2) NOT NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    FOREIGN KEY (billing_document_id) REFERENCES billing_documents(id) ON DELETE CASCADE,
+    FOREIGN KEY (inventory_item_id) REFERENCES inventory_items(id) ON DELETE SET NULL,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL
+);
+```
+
+## Related Models
+
+- [BillingDocument](/api/models/billing) - Parent billing document
+- [InventoryItem](/api/models/inventory) - Product reference
+- [Order](/api/models/order) - Service order reference
+- [BillingService](/api/services/billing) - Billing operations

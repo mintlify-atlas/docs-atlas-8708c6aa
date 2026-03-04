@@ -1,0 +1,405 @@
+---
+title: CompanyAiUsage Model
+description: Tracks AI diagnostic usage per company for quota enforcement and billing
+---
+
+## Overview
+
+The `CompanyAiUsage` model records every AI diagnostic request made by a company. It tracks token consumption, associates usage with specific orders, and enables monthly quota enforcement based on subscription plans.
+
+## Model Definition
+
+```php
+namespace App\Models;
+
+class CompanyAiUsage extends Model
+{
+    protected $fillable = [
+        'company_id',
+        'order_id',
+        'year_month',
+        'plan_snapshot',
+        'prompt_chars',
+        'response_chars',
+        'prompt_tokens_estimated',
+        'response_tokens_estimated',
+        'total_tokens_estimated',
+        'status',
+        'error_message',
+    ];
+}
+```
+
+## Attributes
+
+<ParamField path="company_id" type="integer" required>
+  Foreign key to the company that made the AI request
+</ParamField>
+
+<ParamField path="order_id" type="integer" required>
+  Foreign key to the service order being diagnosed
+</ParamField>
+
+<ParamField path="year_month" type="string" required>
+  Month of usage in `YYYY-MM` format (e.g., `2026-03`) for quota tracking
+</ParamField>
+
+<ParamField path="plan_snapshot" type="string" required>
+  Subscription plan at time of request (e.g., `enterprise`, `developer_test`)
+</ParamField>
+
+<ParamField path="prompt_chars" type="integer" required>
+  Character count of the prompt sent to AI
+</ParamField>
+
+<ParamField path="response_chars" type="integer" required>
+  Character count of the AI response
+</ParamField>
+
+<ParamField path="prompt_tokens_estimated" type="integer" required>
+  Estimated tokens used in the prompt (~chars / 4)
+</ParamField>
+
+<ParamField path="response_tokens_estimated" type="integer" required>
+  Estimated tokens used in the response (~chars / 4)
+</ParamField>
+
+<ParamField path="total_tokens_estimated" type="integer" required>
+  Total estimated tokens (prompt + response)
+</ParamField>
+
+<ParamField path="status" type="string" required>
+  Request status: `success`, `failed`, `quota_exceeded`
+</ParamField>
+
+<ParamField path="error_message" type="string">
+  Error details if status is `failed`
+</ParamField>
+
+## Relationships
+
+### Company
+
+```php
+public function company(): BelongsTo
+{
+    return $this->belongsTo(Company::class);
+}
+```
+
+Access the company that made the request:
+
+```php
+$usage = CompanyAiUsage::with('company')->find(1);
+$companyName = $usage->company->name;
+$plan = $usage->company->subscription?->plan;
+```
+
+### Order
+
+```php
+public function order(): BelongsTo
+{
+    return $this->belongsTo(Order::class);
+}
+```
+
+Link usage to the specific service order:
+
+```php
+$usage = CompanyAiUsage::with('order')->find(1);
+$symptoms = $usage->order->symptoms;
+$diagnosis = $usage->order->ai_potential_causes;
+```
+
+## Usage Examples
+
+### Recording AI Usage
+
+```php
+use App\Models\CompanyAiUsage;
+
+$usage = CompanyAiUsage::create([
+    'company_id' => $company->id,
+    'order_id' => $order->id,
+    'year_month' => now()->format('Y-m'),
+    'plan_snapshot' => $company->subscription?->plan ?? 'starter',
+    'prompt_chars' => strlen($prompt),
+    'response_chars' => strlen($response),
+    'prompt_tokens_estimated' => (int) ceil(strlen($prompt) / 4),
+    'response_tokens_estimated' => (int) ceil(strlen($response) / 4),
+    'total_tokens_estimated' => $totalTokens,
+    'status' => 'success',
+]);
+```
+
+### Checking Monthly Usage
+
+```php
+$currentMonth = now()->format('Y-m');
+
+$monthlyUsage = CompanyAiUsage::where('company_id', $companyId)
+    ->where('year_month', $currentMonth)
+    ->where('status', 'success')
+    ->selectRaw('
+        COUNT(*) as queries_used,
+        SUM(total_tokens_estimated) as tokens_used
+    ')
+    ->first();
+
+// Check against plan limits
+$queriesUsed = $monthlyUsage->queries_used ?? 0;
+$tokensUsed = $monthlyUsage->tokens_used ?? 0;
+
+$plan = $company->subscription?->plan ?? 'starter';
+$queryLimit = $aiPlanPolicyService->queryLimit($plan);
+$tokenLimit = $aiPlanPolicyService->tokenLimit($plan);
+
+$canUseAi = $queriesUsed < $queryLimit && $tokensUsed < $tokenLimit;
+```
+
+### Recording Failed Requests
+
+```php
+CompanyAiUsage::create([
+    'company_id' => $company->id,
+    'order_id' => $order->id,
+    'year_month' => now()->format('Y-m'),
+    'plan_snapshot' => $plan,
+    'prompt_chars' => strlen($prompt),
+    'response_chars' => 0,
+    'prompt_tokens_estimated' => $estimatedTokens,
+    'response_tokens_estimated' => 0,
+    'total_tokens_estimated' => $estimatedTokens,
+    'status' => 'failed',
+    'error_message' => $exception->getMessage(),
+]);
+```
+
+### Recording Quota Exceeded
+
+```php
+CompanyAiUsage::create([
+    'company_id' => $company->id,
+    'order_id' => $order->id,
+    'year_month' => now()->format('Y-m'),
+    'plan_snapshot' => $plan,
+    'prompt_chars' => strlen($prompt),
+    'response_chars' => 0,
+    'prompt_tokens_estimated' => $estimatedTokens,
+    'response_tokens_estimated' => 0,
+    'total_tokens_estimated' => 0,
+    'status' => 'quota_exceeded',
+    'error_message' => 'Monthly query limit reached',
+]);
+```
+
+## Quota Enforcement
+
+The `AiUsageService` uses this model to enforce limits:
+
+```php
+// app/Services/AiUsageService.php
+
+public function monthlyUsage(Company $company): array
+{
+    $currentMonth = now()->format('Y-m');
+
+    $aggregate = CompanyAiUsage::query()
+        ->where('company_id', $company->id)
+        ->where('year_month', $currentMonth)
+        ->where('status', 'success')
+        ->selectRaw('
+            COUNT(*) as queries_used,
+            COALESCE(SUM(total_tokens_estimated), 0) as tokens_used
+        ')
+        ->first();
+
+    return [
+        'queries_used' => $aggregate?->queries_used ?? 0,
+        'tokens_used' => (int) ($aggregate?->tokens_used ?? 0),
+    ];
+}
+
+public function canUseAi(Company $company, int $estimatedTokens): bool
+{
+    $plan = $company->subscription?->plan ?? 'starter';
+    
+    if (!$this->aiPlanPolicyService->supportsAi($plan)) {
+        return false;
+    }
+
+    $usage = $this->monthlyUsage($company);
+    $queryLimit = $this->aiPlanPolicyService->queryLimit($plan);
+    $tokenLimit = $this->aiPlanPolicyService->tokenLimit($plan);
+
+    return $usage['queries_used'] < $queryLimit 
+        && ($usage['tokens_used'] + $estimatedTokens) <= $tokenLimit;
+}
+```
+
+## Reporting & Analytics
+
+### Usage by Month
+
+```php
+$usageByMonth = CompanyAiUsage::where('company_id', $companyId)
+    ->where('status', 'success')
+    ->selectRaw('
+        year_month,
+        COUNT(*) as total_queries,
+        SUM(total_tokens_estimated) as total_tokens
+    ')
+    ->groupBy('year_month')
+    ->orderBy('year_month', 'desc')
+    ->get();
+```
+
+### Success Rate
+
+```php
+$stats = CompanyAiUsage::where('company_id', $companyId)
+    ->whereBetween('created_at', [$startDate, $endDate])
+    ->selectRaw('
+        COUNT(*) as total_requests,
+        SUM(CASE WHEN status = "success" THEN 1 ELSE 0 END) as successful,
+        SUM(CASE WHEN status = "failed" THEN 1 ELSE 0 END) as failed,
+        SUM(CASE WHEN status = "quota_exceeded" THEN 1 ELSE 0 END) as blocked
+    ')
+    ->first();
+
+$successRate = $stats->total_requests > 0
+    ? ($stats->successful / $stats->total_requests) * 100
+    : 0;
+```
+
+### Top Users by Token Consumption
+
+```php
+$topCompanies = CompanyAiUsage::selectRaw('
+        company_id,
+        COUNT(*) as query_count,
+        SUM(total_tokens_estimated) as total_tokens
+    ')
+    ->where('year_month', now()->format('Y-m'))
+    ->where('status', 'success')
+    ->groupBy('company_id')
+    ->orderBy('total_tokens', 'desc')
+    ->limit(10)
+    ->with('company')
+    ->get();
+```
+
+## Token Estimation
+
+Token estimation uses a simple heuristic:
+
+```php
+// app/Services/AiTokenEstimator.php
+public function estimateFromChars(int $chars): int
+{
+    if ($chars <= 0) {
+        return 0;
+    }
+    
+    return (int) ceil($chars / 4);
+}
+```
+
+This assumes ~4 characters per token (typical for English text).
+
+## Status Values
+
+| Status | Description | Counted Against Quota? |
+|--------|-------------|------------------------|
+| `success` | AI request completed successfully | Yes |
+| `failed` | AI request failed due to error | No |
+| `quota_exceeded` | Request blocked due to limits | No |
+
+## Best Practices
+
+### 1. Always Snapshot Plan
+
+Store the plan at time of request:
+
+```php
+'plan_snapshot' => $company->subscription?->plan ?? 'starter',
+```
+
+This preserves historical accuracy even if the company changes plans.
+
+### 2. Estimate Tokens Before Request
+
+```php
+$estimatedTokens = $aiTokenEstimator->estimateFromChars(strlen($symptoms));
+
+if (!$aiUsageService->canUseAi($company, $estimatedTokens)) {
+    return response()->json(['error' => 'Quota exceeded'], 403);
+}
+```
+
+### 3. Record All Attempts
+
+Even failed requests should be logged:
+
+```php
+try {
+    $result = $aiService->diagnose($symptoms);
+    $status = 'success';
+} catch (\Exception $e) {
+    $status = 'failed';
+    $errorMessage = $e->getMessage();
+}
+
+CompanyAiUsage::create([
+    'status' => $status,
+    'error_message' => $errorMessage ?? null,
+    // ...
+]);
+```
+
+### 4. Use Transactions
+
+When creating usage records and updating orders:
+
+```php
+DB::transaction(function () use ($company, $order, $aiResult) {
+    CompanyAiUsage::create([...]);
+    $order->update([
+        'ai_diagnosed_at' => now(),
+        'ai_potential_causes' => $aiResult['causes'],
+        // ...
+    ]);
+});
+```
+
+## Database Schema
+
+```sql
+CREATE TABLE company_ai_usages (
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    company_id BIGINT UNSIGNED NOT NULL,
+    order_id BIGINT UNSIGNED NOT NULL,
+    year_month VARCHAR(7) NOT NULL,
+    plan_snapshot VARCHAR(255) NOT NULL,
+    prompt_chars INT NOT NULL,
+    response_chars INT NOT NULL,
+    prompt_tokens_estimated INT NOT NULL,
+    response_tokens_estimated INT NOT NULL,
+    total_tokens_estimated INT NOT NULL,
+    status VARCHAR(255) NOT NULL,
+    error_message TEXT NULL,
+    created_at TIMESTAMP NULL,
+    updated_at TIMESTAMP NULL,
+    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    INDEX idx_company_month_status (company_id, year_month, status)
+);
+```
+
+## Related Models
+
+- [Company](/api/models/company) - Company that made the request
+- [Order](/api/models/order) - Service order being diagnosed
+- [Subscription](/api/models/subscription) - Plan limits
+- [AiUsageService](/api/services/ai-usage) - Usage tracking and quota enforcement

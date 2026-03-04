@@ -79,7 +79,10 @@
               "api/models/customer",
               "api/models/equipment",
               "api/models/inventory",
-              "api/models/billing"
+              "api/models/inventory-movement",
+              "api/models/billing",
+              "api/models/billing-document-item",
+              "api/models/company-ai-usage"
             ]
           },
           {
