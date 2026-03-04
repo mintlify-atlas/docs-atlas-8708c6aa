@@ -1,0 +1,150 @@
+{
+  "projectType": "saas",
+  "projectName": "ElectroFix AI",
+  "projectDescription": "Multi-tenant SaaS platform for electronics repair shop management with AI-powered diagnostics, inventory, billing, and service order tracking.",
+  "theme": "aspen",
+  "primaryColor": "#2563eb",
+  "lightColor": "#3b82f6",
+  "darkColor": "#1e40af",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/multi-tenancy",
+              "concepts/roles-permissions",
+              "concepts/subscription-plans",
+              "concepts/ai-diagnostics"
+            ]
+          },
+          {
+            "group": "User Guides",
+            "pages": [
+              "guides/worker/orders",
+              "guides/worker/customers",
+              "guides/worker/equipment",
+              "guides/worker/inventory",
+              "guides/worker/billing",
+              "guides/admin/company-settings",
+              "guides/admin/worker-management",
+              "guides/admin/subscription",
+              "guides/developer/insights"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/service-orders",
+              "features/ai-diagnostics",
+              "features/inventory-management",
+              "features/billing-invoicing",
+              "features/customer-equipment"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Models",
+            "pages": [
+              "api/models/company",
+              "api/models/user",
+              "api/models/subscription",
+              "api/models/order",
+              "api/models/customer",
+              "api/models/equipment",
+              "api/models/inventory",
+              "api/models/billing"
+            ]
+          },
+          {
+            "group": "Services",
+            "pages": [
+              "api/services/ai-diagnostic",
+              "api/services/ai-usage",
+              "api/services/billing",
+              "api/services/inventory",
+              "api/services/order-creation"
+            ]
+          },
+          {
+            "group": "Controllers",
+            "pages": [
+              "api/controllers/worker",
+              "api/controllers/admin",
+              "api/controllers/developer"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Deployment",
+        "groups": [
+          {
+            "group": "Setup",
+            "pages": [
+              "deployment/local-development",
+              "deployment/production",
+              "deployment/configuration"
+            ]
+          },
+          {
+            "group": "Database",
+            "pages": [
+              "deployment/migrations",
+              "deployment/seeders"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Multi-tenant company management with role-based access control",
+    "AI-powered diagnostic system with token usage tracking and plan-based limits",
+    "Complete service order lifecycle management with status tracking",
+    "Inventory management with stock adjustments and movement tracking",
+    "Billing and invoicing system with PDF generation and multiple document types",
+    "Customer and equipment database with service history",
+    "Subscription plan management with module-level access control",
+    "Developer dashboard for global company insights and analytics"
+  ],
+  "publicApiSurface": [
+    "App\\Models\\Company",
+    "App\\Models\\User",
+    "App\\Models\\Order",
+    "App\\Models\\Customer",
+    "App\\Models\\Equipment",
+    "App\\Models\\InventoryItem",
+    "App\\Models\\BillingDocument",
+    "App\\Models\\Subscription",
+    "App\\Models\\CompanyAiUsage",
+    "App\\Services\\AiDiagnosticService",
+    "App\\Services\\AiUsageService",
+    "App\\Services\\BillingService",
+    "App\\Services\\InventoryService",
+    "App\\Services\\OrderCreationService",
+    "App\\Http\\Controllers\\Worker\\OrderController",
+    "App\\Http\\Controllers\\Worker\\CustomerController",
+    "App\\Http\\Controllers\\Worker\\EquipmentController",
+    "App\\Http\\Controllers\\Worker\\InventoryController",
+    "App\\Http\\Controllers\\Worker\\BillingController",
+    "App\\Http\\Controllers\\Admin\\CompanyController",
+    "App\\Http\\Controllers\\Admin\\WorkerController",
+    "App\\Http\\Controllers\\Admin\\SubscriptionController",
+    "App\\Http\\Controllers\\Developer\\CompanyInsightsController"
+  ]
+}
